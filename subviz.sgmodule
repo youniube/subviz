@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.12
-#!desc=Subscription node visual analyzer local UI for Surge. Filter Clash proxy-groups/rules; only real proxy nodes are counted.
+#!name=SubViz Surge v0.1.13
+#!desc=Subscription node visual analyzer local UI for Surge. Render all nodes; add online GeoIP enrichment and rename unknown nodes.
 #!category=Subscription
 
 [General]
