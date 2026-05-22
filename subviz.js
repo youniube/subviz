@@ -1,17 +1,20 @@
-var SUBVIZ_SURGE_0_1_10 = true;
+var SUBVIZ_SURGE_0_1_11 = true;
 var SubViz = (function () {
   'use strict';
+  var VERSION = '0.1.11';
+  var MARKER = 'SUBVIZ_SURGE_0_1_11';
 
-  var VERSION = '0.1.10';
-  var MARKER = 'SUBVIZ_SURGE_0_1_10';
-
-  function nowIso() { try { return new Date().toISOString(); } catch (e) { return ''; } }
-  function hasOwn(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
-
+  function safeStringify(obj, space) {
+    return JSON.stringify(obj, null, space || 0).replace(/[\u007f-\uffff]/g, function (c) {
+      var s = c.charCodeAt(0).toString(16);
+      return '\\u' + ('0000' + s).slice(-4);
+    });
+  }
   function respond(status, body, headers) {
     var h = {
       'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Pragma': 'no-cache',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization'
@@ -21,460 +24,275 @@ var SubViz = (function () {
     $done({ response: { status: status || 200, headers: h, body: body || '' } });
   }
   function respondJSON(obj, status) {
-    respond(status || 200, JSON.stringify(obj, null, 2), { 'Content-Type': 'application/json; charset=utf-8' });
+    respond(status || 200, safeStringify(obj, 2), { 'Content-Type': 'application/json; charset=utf-8' });
   }
-  function safeDecodeURIComponent(s) {
-    if (s == null) return '';
-    s = String(s).replace(/\+/g, '%20');
-    try { return decodeURIComponent(s); } catch (e) { return String(s); }
-  }
-  function htmlEscape(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
-  function getPath(url) {
-    var m = String(url || '').match(/^https?:\/\/[^\/]+([^?#]*)/i);
-    return m ? (m[1] || '/') : '/';
-  }
-  function parseQuery(url) {
-    var q = '', idx = String(url || '').indexOf('?'), out = {};
-    if (idx >= 0) q = String(url).slice(idx + 1).split('#')[0];
-    if (!q) return out;
-    q.split('&').forEach(function (part) {
-      if (!part) return;
-      var p = part.split('='), key = safeDecodeURIComponent(p.shift() || ''), val = safeDecodeURIComponent(p.join('=') || '');
-      if (key) out[key] = val;
-    });
-    return out;
-  }
-
-  function utf8Decode(bytes) {
-    var out = '', i = 0, c, c2, c3, c4, cp;
-    while (i < bytes.length) {
-      c = bytes[i++];
-      if (c < 128) out += String.fromCharCode(c);
-      else if (c > 191 && c < 224) {
-        c2 = bytes[i++]; out += String.fromCharCode(((c & 31) << 6) | (c2 & 63));
-      } else if (c > 223 && c < 240) {
-        c2 = bytes[i++]; c3 = bytes[i++];
-        out += String.fromCharCode(((c & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
-      } else {
-        c2 = bytes[i++]; c3 = bytes[i++]; c4 = bytes[i++];
-        cp = ((c & 7) << 18) | ((c2 & 63) << 12) | ((c3 & 63) << 6) | (c4 & 63);
-        cp -= 0x10000;
-        out += String.fromCharCode(0xD800 + (cp >> 10), 0xDC00 + (cp & 1023));
-      }
+  function nowIso() { try { return new Date().toISOString(); } catch (e) { return ''; } }
+  function getURL() { return ($request && $request.url) || ''; }
+  function getPath(url) { try { return url.replace(/^https?:\/\/[^\/]+/i, '').split('?')[0] || '/'; } catch (e) { return '/'; } }
+  function getQuery(url, key) {
+    var q = (url.split('?')[1] || '').split('#')[0];
+    var arr = q.split('&');
+    for (var i = 0; i < arr.length; i++) {
+      var kv = arr[i].split('=');
+      if (decodeURIComponent(kv[0] || '') === key) return decodeURIComponent((kv.slice(1).join('=') || '').replace(/\+/g, ' '));
     }
-    return out;
+    return '';
   }
-  function base64Decode(input) {
-    if (!input) return '';
-    var s = String(input).replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
-    var pad = s.length % 4; if (pad) s += new Array(5 - pad).join('=');
-    if (typeof atob === 'function') {
-      try {
-        var bin = atob(s), arr = [];
-        for (var i = 0; i < bin.length; i++) arr.push(bin.charCodeAt(i));
-        return utf8Decode(arr);
-      } catch (e) {}
-    }
-    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    var bytes = [], buffer, bc = 0, bs, idx;
-    for (var j = 0; j < s.length; j++) {
-      idx = chars.indexOf(s.charAt(j)); if (idx < 0) continue;
-      buffer = idx; if (buffer === 64) break;
-      bs = bc % 4 ? bs * 64 + buffer : buffer;
-      if (bc++ % 4) bytes.push(255 & (bs >> ((-2 * bc) & 6)));
-    }
-    return utf8Decode(bytes);
-  }
-  function b64(str) {
-    if (typeof btoa === 'function') {
-      try { return btoa(unescape(encodeURIComponent(str))); } catch (e) {}
-    }
-    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    var bytes = [];
-    for (var i = 0; i < str.length; i++) {
-      var c = str.charCodeAt(i);
-      if (c < 128) bytes.push(c);
-      else if (c < 2048) bytes.push((c >> 6) | 192, (c & 63) | 128);
-      else bytes.push((c >> 12) | 224, ((c >> 6) & 63) | 128, (c & 63) | 128);
-    }
-    var out = '', j = 0;
-    while (j < bytes.length) {
-      var c1 = bytes[j++], c2 = bytes[j++], c3 = bytes[j++];
-      out += chars.charAt(c1 >> 2);
-      out += chars.charAt(((c1 & 3) << 4) | ((c2 || 0) >> 4));
-      out += isNaN(c2) ? '=' : chars.charAt(((c2 & 15) << 2) | ((c3 || 0) >> 6));
-      out += isNaN(c3) ? '=' : chars.charAt(c3 & 63);
-    }
-    return out;
-  }
-  function looksLikeBase64(s) {
-    s = String(s || '').trim();
-    if (s.length < 24) return false;
-    if (/^(vmess|vless|trojan|ss|ssr|hysteria2|hy2|tuic|snell|socks5|socks):\/\//im.test(s)) return false;
-    if (/proxies\s*:/i.test(s)) return false;
-    return /^[A-Za-z0-9+/_=\-\r\n]+$/.test(s);
-  }
-  function maybeDecodeWhole(raw) {
-    var s = String(raw || '').trim();
-    if (!s) return '';
-    if (looksLikeBase64(s)) {
-      var decoded = base64Decode(s);
-      if (/^(vmess|vless|trojan|ss|ssr|hysteria2|hy2|hysteria|tuic|snell|socks5|socks):\/\//im.test(decoded) || /proxies\s*:/i.test(decoded) || decoded.split('\n').length > 2) return decoded;
-    }
-    return s;
-  }
-
-  function trimQuotes(v) {
-    v = String(v == null ? '' : v).trim();
-    if ((v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') || (v.charAt(0) === "'" && v.charAt(v.length - 1) === "'")) return v.slice(1, -1);
+  function clean(v) {
+    if (v === null || v === undefined) return '';
+    v = String(v).trim();
+    if ((v[0] === '"' && v[v.length - 1] === '"') || (v[0] === "'" && v[v.length - 1] === "'")) v = v.slice(1, -1);
     return v;
   }
-  function splitRespectQuotes(s, sep) {
-    var parts = [], cur = '', quote = '', depth = 0;
-    for (var i = 0; i < s.length; i++) {
-      var ch = s.charAt(i);
-      if (quote) { cur += ch; if (ch === quote && s.charAt(i - 1) !== '\\') quote = ''; }
-      else if (ch === '"' || ch === "'") { quote = ch; cur += ch; }
-      else if (ch === '[' || ch === '{' || ch === '(') { depth++; cur += ch; }
-      else if (ch === ']' || ch === '}' || ch === ')') { depth = Math.max(0, depth - 1); cur += ch; }
-      else if (ch === sep && depth === 0) { parts.push(cur.trim()); cur = ''; }
-      else cur += ch;
-    }
-    if (cur.trim()) parts.push(cur.trim());
-    return parts;
+  function decodeURIComponentSafe(s) { try { return decodeURIComponent(s); } catch (e) { return s || ''; } }
+  function atobSafe(input) {
+    input = String(input || '').trim().replace(/\s+/g, '');
+    if (!input) return '';
+    input = input.replace(/-/g, '+').replace(/_/g, '/');
+    while (input.length % 4) input += '=';
+    try {
+      var bin = atob(input);
+      try { return decodeURIComponent(escape(bin)); } catch (e1) { return bin; }
+    } catch (e2) { return ''; }
   }
-  function parseInlineMap(s) {
+  function maybeDecodeBase64(text) {
+    var t = String(text || '').trim();
+    if (!t) return t;
+    if (/^(vmess|vless|trojan|ss|ssr|hysteria2|hy2|hysteria|tuic|snell|socks5?|http):\/\//im.test(t)) return t;
+    if (/proxies\s*:/i.test(t)) return t;
+    if (/^[A-Za-z0-9+/_=-]+$/.test(t) && t.length > 40) {
+      var d = atobSafe(t);
+      if (d && d.length > 10) return d;
+    }
+    return t;
+  }
+
+  var COUNTRY = {
+    HK:['Hong Kong','\u9999\u6e2f',['HK','HKG'],['\u9999\u6e2f','Hong Kong']],
+    TW:['Taiwan','\u53f0\u6e7e',['TW','TWN'],['\u53f0\u6e7e','\u81fa\u7063','Taiwan']],
+    MO:['Macau','\u6fb3\u95e8',['MO','MAC'],['\u6fb3\u95e8','\u6fb3\u9580','Macau','Macao']],
+    US:['United States','\u7f8e\u56fd',['US','USA'],['\u7f8e\u56fd','\u7f8e\u897f','\u7f8e\u4e1c','\u7f8e\u5357','\u7f8e\u5317','United States','USA','America']],
+    JP:['Japan','\u65e5\u672c',['JP','JPN'],['\u65e5\u672c','Japan','Tokyo','\u4e1c\u4eac','\u5927\u962a']],
+    SG:['Singapore','\u65b0\u52a0\u5761',['SG','SGP'],['\u65b0\u52a0\u5761','\u72ee\u57ce','Singapore']],
+    KR:['Korea','\u97e9\u56fd',['KR','KOR'],['\u97e9\u56fd','\u9996\u5c14','Korea','Seoul']],
+    GB:['United Kingdom','\u82f1\u56fd',['GB','UK','GBR'],['\u82f1\u56fd','\u4f26\u6566','United Kingdom','Britain','London']],
+    DE:['Germany','\u5fb7\u56fd',['DE','DEU'],['\u5fb7\u56fd','Germany','Frankfurt']],
+    FR:['France','\u6cd5\u56fd',['FR','FRA'],['\u6cd5\u56fd','France','Paris']],
+    NL:['Netherlands','\u8377\u5170',['NL','NLD'],['\u8377\u5170','Netherlands','Holland']],
+    CA:['Canada','\u52a0\u62ff\u5927',['CA','CAN'],['\u52a0\u62ff\u5927','Canada']],
+    AU:['Australia','\u6fb3\u5927\u5229\u4e9a',['AU','AUS'],['\u6fb3\u5927\u5229\u4e9a','\u6fb3\u6d32','Australia']],
+    RU:['Russia','\u4fc4\u7f57\u65af',['RU','RUS'],['\u4fc4\u7f57\u65af','Russia','Moscow']],
+    IN:['India','\u5370\u5ea6',['IN','IND'],['\u5370\u5ea6','India']],
+    VN:['Vietnam','\u8d8a\u5357',['VN','VNM'],['\u8d8a\u5357','Vietnam']],
+    TH:['Thailand','\u6cf0\u56fd',['TH','THA'],['\u6cf0\u56fd','Thailand']],
+    MY:['Malaysia','\u9a6c\u6765\u897f\u4e9a',['MY','MYS'],['\u9a6c\u6765\u897f\u4e9a','Malaysia']],
+    PH:['Philippines','\u83f2\u5f8b\u5bbe',['PH','PHL'],['\u83f2\u5f8b\u5bbe','Philippines']],
+    TR:['Turkey','\u571f\u8033\u5176',['TR','TUR'],['\u571f\u8033\u5176','Turkey']],
+    ES:['Spain','\u897f\u73ed\u7259',['ES','ESP'],['\u897f\u73ed\u7259','Spain']],
+    IT:['Italy','\u610f\u5927\u5229',['IT','ITA'],['\u610f\u5927\u5229','Italy']],
+    SE:['Sweden','\u745e\u5178',['SE','SWE'],['\u745e\u5178','Sweden']],
+    FI:['Finland','\u82ac\u5170',['FI','FIN'],['\u82ac\u5170','Finland','Helsinki','\u8d6b\u5c14\u8f9b\u57fa']],
+    RO:['Romania','\u7f57\u9a6c\u5c3c\u4e9a',['RO','ROU'],['\u7f57\u9a6c\u5c3c\u4e9a','Romania']],
+    PL:['Poland','\u6ce2\u5170',['PL','POL'],['\u6ce2\u5170','Poland']],
+    CZ:['Czechia','\u6377\u514b',['CZ','CZE'],['\u6377\u514b','Czech','Czechia']],
+    CH:['Switzerland','\u745e\u58eb',['CH','CHE'],['\u745e\u58eb','Switzerland']],
+    LV:['Latvia','\u62c9\u8131\u7ef4\u4e9a',['LV','LVA'],['\u62c9\u8131\u7ef4\u4e9a','Latvia']],
+    EE:['Estonia','\u7231\u6c99\u5c3c\u4e9a',['EE','EST'],['\u7231\u6c99\u5c3c\u4e9a','Estonia']],
+    MD:['Moldova','\u6469\u5c14\u591a\u74e6',['MD','MDA'],['\u6469\u5c14\u591a\u74e6','Moldova']],
+    AR:['Argentina','\u963f\u6839\u5ef7',['AR','ARG'],['\u963f\u6839\u5ef7','Argentina']],
+    ZA:['South Africa','\u5357\u975e',['ZA','ZAF'],['\u5357\u975e','South Africa']],
+    NG:['Nigeria','\u5c3c\u65e5\u5229\u4e9a',['NG','NGA'],['\u5c3c\u65e5\u5229\u4e9a','Nigeria']],
+    NZ:['New Zealand','\u65b0\u897f\u5170',['NZ','NZL'],['\u65b0\u897f\u5170','New Zealand']]
+  };
+  function flagToCC(s) {
+    s = String(s || '');
+    for (var i = 0; i < s.length - 3; i++) {
+      var a = s.charCodeAt(i), b = s.charCodeAt(i + 1), c = s.charCodeAt(i + 2), d = s.charCodeAt(i + 3);
+      if (a === 0xD83C && c === 0xD83C && b >= 0xDDE6 && b <= 0xDDFF && d >= 0xDDE6 && d <= 0xDDFF) {
+        return String.fromCharCode(65 + b - 0xDDE6) + String.fromCharCode(65 + d - 0xDDE6);
+      }
+    }
+    return '';
+  }
+  function countryInfo(code, source, confidence) {
+    var c = COUNTRY[code] || null;
+    if (!c) return { countryCode: 'UN', country: '\u672a\u77e5', countrySource: 'none', countryConfidence: 0 };
+    return { countryCode: code, country: c[1], countrySource: source || 'rule', countryConfidence: confidence || 80 };
+  }
+  function isCFServer(server) {
+    server = String(server || '').toLowerCase();
+    if (/cloudflare|workers\.dev|pages\.dev/.test(server)) return true;
+    if (/^(104\.(1[6-9]|2[0-9]|3[0-1])\.|172\.(6[4-9]|7[0-1])\.|162\.158\.|190\.93\.|188\.114\.|141\.101\.|108\.162\.|198\.41\.)/.test(server)) return true;
+    return false;
+  }
+  function detectCountry(name, server, extra) {
+    name = String(name || ''); server = String(server || ''); extra = extra || {};
+    var text = [name, server, extra.country, extra.countryCode, extra.sni, extra.servername, extra.Host, extra.host].join(' ');
+    var explicit = flagToCC(text);
+    if (explicit && COUNTRY[explicit]) return countryInfo(explicit, 'flag', 98);
+    var upper = text.toUpperCase();
+    var keys = Object.keys(COUNTRY);
+    for (var i = 0; i < keys.length; i++) {
+      var code = keys[i];
+      var arr = COUNTRY[code][2];
+      for (var j = 0; j < arr.length; j++) {
+        var token = arr[j].toUpperCase();
+        var re = new RegExp('(?:^|[^A-Z0-9])' + token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:[^A-Z0-9]|$)');
+        if (re.test(upper)) return countryInfo(code, 'iso', 92);
+      }
+      var names = COUNTRY[code][3];
+      for (var k = 0; k < names.length; k++) {
+        if (text.indexOf(names[k]) >= 0 || upper.indexOf(String(names[k]).toUpperCase()) >= 0) return countryInfo(code, 'name', 90);
+      }
+    }
+    if (/CF\s*\u4e2d\u8f6c|\u4e2d\u8f6c|Cloudflare|Anycast|CDN/i.test(text) || isCFServer(server)) {
+      return { countryCode: 'CDN', country: 'CDN/\u4e2d\u8f6c', countrySource: 'cdn', countryConfidence: 60 };
+    }
+    return { countryCode: 'UN', country: '\u672a\u77e5', countrySource: 'none', countryConfidence: 0 };
+  }
+
+  function buildNode(obj, format, raw) {
+    obj = obj || {};
+    var name = clean(obj.name || obj.ps || obj.remarks || obj.remark || obj.tag || '');
+    var protocol = clean((obj.type || obj.protocol || '')).toLowerCase();
+    if (protocol === 'socks') protocol = 'socks5';
+    var server = clean(obj.server || obj.add || obj.host || obj.address || obj.hostname || '');
+    var port = clean(obj.port || '');
+    var network = clean(obj.network || obj.net || obj.transport || '');
+    var tls = clean(obj.tls || obj.security || obj['skip-cert-verify'] || '');
+    if (!protocol && raw) {
+      var m = String(raw).match(/^([a-z0-9+.-]+):\/\//i);
+      if (m) protocol = m[1].toLowerCase();
+    }
+    var c = detectCountry(name, server, obj);
+    return {
+      id: clean(obj.uuid || obj.id || obj.password || ''), name: name || server || 'node', protocol: protocol || 'unknown',
+      server: server, port: port, network: network, tls: tls, countryCode: c.countryCode, country: c.country,
+      countrySource: c.countrySource, countryConfidence: c.countryConfidence,
+      sourceFormat: format || 'unknown', raw: raw || safeStringify(obj, 0), extra: obj,
+      fingerprint: ''
+    };
+  }
+  function setFingerprint(n) {
+    n.fingerprint = [n.protocol, n.server, n.port, n.network, n.tls].join('|').toLowerCase();
+    return n;
+  }
+
+  function parseFlowObject(s) {
     var obj = {};
     s = String(s || '').trim();
-    if (s.charAt(0) === '{' && s.charAt(s.length - 1) === '}') s = s.slice(1, -1);
-    splitRespectQuotes(s, ',').forEach(function (part) {
-      var idx = part.indexOf(':'); if (idx < 0) return;
-      var k = trimQuotes(part.slice(0, idx));
-      var v = trimQuotes(part.slice(idx + 1));
+    if (s[0] === '{') s = s.slice(1);
+    if (s[s.length - 1] === '}') s = s.slice(0, -1);
+    var parts = [], cur = '', quote = '';
+    for (var i = 0; i < s.length; i++) {
+      var ch = s[i];
+      if (quote) { if (ch === quote && s[i-1] !== '\\') quote = ''; cur += ch; }
+      else if (ch === '"' || ch === "'") { quote = ch; cur += ch; }
+      else if (ch === ',') { parts.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    if (cur) parts.push(cur);
+    parts.forEach(function (p) {
+      var idx = p.indexOf(':'); if (idx < 0) return;
+      var k = clean(p.slice(0, idx)); var v = clean(p.slice(idx + 1));
       obj[k] = v;
     });
     return obj;
   }
-  function parseYamlBlockValue(line) {
-    var idx = line.indexOf(':'); if (idx < 0) return null;
-    return { key: trimQuotes(line.slice(0, idx)), value: trimQuotes(line.slice(idx + 1).replace(/\s+#.*$/, '')) };
-  }
-  function parseClashProxies(text) {
-    var lines = String(text || '').split(/\r?\n/), start = -1;
-    for (var i = 0; i < lines.length; i++) if (/^\s*proxies\s*:\s*$/i.test(lines[i])) { start = i + 1; break; }
-    if (start < 0) return [];
-    var nodes = [], current = null;
-    function pushCurrent() { if (!current) return; if (current.name || current.server || current.type) nodes.push(clashToNode(current)); current = null; }
-    for (var j = start; j < lines.length; j++) {
-      var line = lines[j];
-      if (/^[A-Za-z0-9_\-]+\s*:/.test(line) && !/^\s/.test(line)) break;
-      if (/^\s*#/.test(line) || /^\s*$/.test(line)) continue;
-      var mInline = line.match(/^\s*-\s*(\{.*\})\s*$/);
-      if (mInline) { pushCurrent(); nodes.push(clashToNode(parseInlineMap(mInline[1]))); continue; }
-      var mStart = line.match(/^\s*-\s*(.*)$/);
-      if (mStart) {
-        pushCurrent(); current = {};
-        var rest = mStart[1].trim();
-        if (rest) {
-          if (rest.charAt(0) === '{') current = parseInlineMap(rest);
-          else { var kv0 = parseYamlBlockValue(rest); if (kv0) current[kv0.key] = kv0.value; }
-        }
-        continue;
-      }
-      if (current) {
-        var kv = parseYamlBlockValue(line.trim());
-        if (kv) current[kv.key] = kv.value;
-      }
+  function parseClash(text) {
+    var nodes = [], lines = String(text || '').split(/\r?\n/), cur = null, inProxies = false;
+    function push() { if (cur && (cur.type || cur.server || cur.name)) nodes.push(setFingerprint(buildNode(cur, 'clash-yaml', safeStringify(cur, 0)))); cur = null; }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^\s*proxies\s*:\s*$/i.test(line)) { inProxies = true; continue; }
+      if (!inProxies && /^\s*proxy-providers\s*:/i.test(line)) break;
+      var mFlow = line.match(/^\s*-\s*(\{.*\})\s*$/);
+      if (mFlow) { push(); nodes.push(setFingerprint(buildNode(parseFlowObject(mFlow[1]), 'clash-yaml', mFlow[1]))); continue; }
+      var mName = line.match(/^\s*-\s*name\s*:\s*(.*)$/i);
+      if (mName) { push(); cur = { name: clean(mName[1]) }; continue; }
+      if (!cur) continue;
+      var m = line.match(/^\s+([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+      if (m) cur[m[1]] = clean(m[2]);
+      var m2 = line.match(/^\s+(Host|host|Path|path|servername|sni)\s*:\s*(.*)$/);
+      if (m2) cur[m2[1]] = clean(m2[2]);
     }
-    pushCurrent();
-    return nodes.filter(function (n) { return !!n.name || !!n.server; });
+    push(); return nodes;
   }
-
-  var CODE_TO_NAME = {
-    AD:'安道尔', AE:'阿联酋', AF:'阿富汗', AG:'安提瓜和巴布达', AI:'安圭拉', AL:'阿尔巴尼亚', AM:'亚美尼亚', AO:'安哥拉', AR:'阿根廷', AS:'美属萨摩亚', AT:'奥地利', AU:'澳大利亚', AW:'阿鲁巴', AZ:'阿塞拜疆',
-    BA:'波黑', BB:'巴巴多斯', BD:'孟加拉', BE:'比利时', BF:'布基纳法索', BG:'保加利亚', BH:'巴林', BI:'布隆迪', BJ:'贝宁', BM:'百慕大', BN:'文莱', BO:'玻利维亚', BR:'巴西', BS:'巴哈马', BT:'不丹', BW:'博茨瓦纳', BY:'白俄罗斯', BZ:'伯利兹',
-    CA:'加拿大', CD:'刚果（金）', CF:'中非', CG:'刚果（布）', CH:'瑞士', CI:'科特迪瓦', CL:'智利', CM:'喀麦隆', CN:'中国大陆', CO:'哥伦比亚', CR:'哥斯达黎加', CU:'古巴', CV:'佛得角', CY:'塞浦路斯', CZ:'捷克',
-    DE:'德国', DK:'丹麦', DO:'多米尼加', DZ:'阿尔及利亚', EC:'厄瓜多尔', EE:'爱沙尼亚', EG:'埃及', ES:'西班牙', ET:'埃塞俄比亚', EU:'欧洲', FI:'芬兰', FJ:'斐济', FR:'法国',
-    GB:'英国', GD:'格林纳达', GE:'格鲁吉亚', GH:'加纳', GI:'直布罗陀', GR:'希腊', GT:'危地马拉', HK:'香港', HN:'洪都拉斯', HR:'克罗地亚', HU:'匈牙利', ID:'印尼', IE:'爱尔兰', IL:'以色列', IN:'印度', IQ:'伊拉克', IR:'伊朗', IS:'冰岛', IT:'意大利',
-    JM:'牙买加', JO:'约旦', JP:'日本', KE:'肯尼亚', KG:'吉尔吉斯斯坦', KH:'柬埔寨', KR:'韩国', KW:'科威特', KZ:'哈萨克斯坦', LA:'老挝', LB:'黎巴嫩', LK:'斯里兰卡', LT:'立陶宛', LU:'卢森堡', LV:'拉脱维亚', LY:'利比亚',
-    MA:'摩洛哥', MD:'摩尔多瓦', ME:'黑山', MG:'马达加斯加', MK:'北马其顿', MM:'缅甸', MN:'蒙古', MO:'澳门', MT:'马耳他', MU:'毛里求斯', MV:'马尔代夫', MX:'墨西哥', MY:'马来西亚', MZ:'莫桑比克',
-    NG:'尼日利亚', NL:'荷兰', NO:'挪威', NP:'尼泊尔', NZ:'新西兰', OM:'阿曼', PA:'巴拿马', PE:'秘鲁', PH:'菲律宾', PK:'巴基斯坦', PL:'波兰', PR:'波多黎各', PT:'葡萄牙', PY:'巴拉圭', QA:'卡塔尔',
-    RO:'罗马尼亚', RS:'塞尔维亚', RU:'俄罗斯', SA:'沙特', SE:'瑞典', SG:'新加坡', SI:'斯洛文尼亚', SK:'斯洛伐克', SN:'塞内加尔', TH:'泰国', TR:'土耳其', TW:'台湾', UA:'乌克兰', UK:'英国', US:'美国', UY:'乌拉圭', UZ:'乌兹别克斯坦', VE:'委内瑞拉', VN:'越南', ZA:'南非'
-  };
-  var NAME_KEYWORDS = [
-    ['HK','香港','香港|港区|Hong\\s*Kong|HKG'], ['TW','台湾','台湾|臺灣|台灣|Taiwan|TPE'], ['JP','日本','日本|东京|大阪|Japan|Tokyo|Osaka|NRT|HND'], ['SG','新加坡','新加坡|狮城|Singapore|SIN'], ['US','美国','美国|美國|洛杉矶|洛杉磯|西雅图|西雅圖|硅谷|纽约|紐約|United\\s*States|USA|America|Los\\s*Angeles|Seattle|New\\s*York|San\\s*Jose'], ['KR','韩国','韩国|韓國|首尔|首爾|Korea|Seoul|ICN'], ['GB','英国','英国|英國|伦敦|倫敦|Britain|London'], ['DE','德国','德国|德國|Germany|Frankfurt|Berlin'], ['FR','法国','法国|法國|France|Paris'], ['CA','加拿大','加拿大|Canada|Toronto|Vancouver'], ['AU','澳大利亚','澳大利亚|澳洲|Australia|Sydney|Melbourne'], ['RU','俄罗斯','俄罗斯|俄羅斯|Russia|Moscow'], ['NL','荷兰','荷兰|荷蘭|Netherlands|Amsterdam'], ['IT','意大利','意大利|Italy|Milan|Rome'], ['ES','西班牙','西班牙|Spain|Madrid'], ['TR','土耳其','土耳其|Turkey|Istanbul'], ['IN','印度','印度|India|Mumbai|Delhi'], ['TH','泰国','泰国|泰國|Thailand|Bangkok'], ['VN','越南','越南|Vietnam|Hanoi'], ['MY','马来西亚','马来西亚|馬來西亞|Malaysia|Kuala'], ['PH','菲律宾','菲律宾|菲律賓|Philippines|Manila'], ['ID','印尼','印尼|印度尼西亚|印度尼西亞|Indonesia|Jakarta'], ['MO','澳门','澳门|澳門|Macau|Macao'], ['CN','中国大陆','中国大陆|中國大陸|大陆|大陸|China|Shanghai|Beijing'],
-    ['SE','瑞典','瑞典|Sweden|Stockholm'], ['FI','芬兰','芬兰|芬蘭|Finland|Helsinki'], ['RO','罗马尼亚','罗马尼亚|羅馬尼亞|Romania|Bucharest'], ['PL','波兰','波兰|波蘭|Poland|Warsaw'], ['CZ','捷克','捷克|Czech|Prague'], ['CH','瑞士','瑞士|Switzerland|Zurich'], ['LV','拉脱维亚','拉脱维亚|拉脫維亞|Latvia|Riga'], ['EE','爱沙尼亚','爱沙尼亚|愛沙尼亞|Estonia|Tallinn'], ['MD','摩尔多瓦','摩尔多瓦|摩爾多瓦|Moldova'], ['AR','阿根廷','阿根廷|Argentina'], ['ZA','南非','南非|South\\s*Africa'], ['NG','尼日利亚','尼日利亚|奈及利亚|Nigeria'], ['NZ','新西兰','新西兰|紐西蘭|New\\s*Zealand'], ['PT','葡萄牙','葡萄牙|Portugal|Lisbon'], ['BE','比利时','比利时|比利時|Belgium'], ['AT','奥地利','奥地利|奧地利|Austria'], ['NO','挪威','挪威|Norway'], ['DK','丹麦','丹麦|丹麥|Denmark'], ['IE','爱尔兰','爱尔兰|愛爾蘭|Ireland'], ['IL','以色列','以色列|Israel']
-  ];
-  var CODE_LIST = Object.keys(CODE_TO_NAME).sort().join('|');
-  var CODE_TOKEN_RE = new RegExp('(^|[^A-Za-z]|[0-9])(' + CODE_LIST + ')(?=($|[^A-Za-z0-9]|[_\\-\\s\\]\\|]))', 'i');
-
-  function cleanFlagText(s) {
-    return String(s || '').replace(/\\u200d/g, '\u200d');
-  }
-  function flagCodesFromText(s) {
-    var text = cleanFlagText(s), out = [], i = 0;
-    while (i < text.length) {
-      var cp1 = text.codePointAt ? text.codePointAt(i) : text.charCodeAt(i);
-      var w1 = cp1 > 0xFFFF ? 2 : 1;
-      if (cp1 >= 0x1F1E6 && cp1 <= 0x1F1FF && i + w1 < text.length) {
-        var cp2 = text.codePointAt ? text.codePointAt(i + w1) : text.charCodeAt(i + w1);
-        var w2 = cp2 > 0xFFFF ? 2 : 1;
-        if (cp2 >= 0x1F1E6 && cp2 <= 0x1F1FF) {
-          out.push(String.fromCharCode(65 + cp1 - 0x1F1E6) + String.fromCharCode(65 + cp2 - 0x1F1E6));
-          i += w1 + w2; continue;
-        }
-      }
-      i += w1;
-    }
-    return out;
-  }
-  function inferByFlag(text) {
-    var codes = flagCodesFromText(text);
-    for (var i = 0; i < codes.length; i++) {
-      var c = codes[i] === 'UK' ? 'GB' : codes[i];
-      if (CODE_TO_NAME[c]) return { code: c, name: CODE_TO_NAME[c], source: 'flag', confidence: 0.98 };
-    }
-    return null;
-  }
-  function inferByKeyword(text) {
-    text = cleanFlagText(text);
-    for (var i = 0; i < NAME_KEYWORDS.length; i++) {
-      var re = new RegExp(NAME_KEYWORDS[i][2], 'i');
-      if (re.test(text)) return { code: NAME_KEYWORDS[i][0], name: NAME_KEYWORDS[i][1], source: 'keyword', confidence: 0.88 };
-    }
-    return null;
-  }
-  function inferByCode(text) {
-    text = String(text || '').replace(/\bUK\b/ig, 'GB');
-    var m = text.match(CODE_TOKEN_RE);
-    if (m && m[2]) {
-      var c = String(m[2]).toUpperCase(); if (c === 'UK') c = 'GB';
-      if (CODE_TO_NAME[c]) return { code: c, name: CODE_TO_NAME[c], source: 'iso-code', confidence: 0.78 };
-    }
-    return null;
-  }
-  function inferByExtraCountry(extra) {
-    if (!extra) return null;
-    var vals = [];
-    ['country','countryCode','region','location'].forEach(function (k) { if (extra[k]) vals.push(String(extra[k])); });
-    if (!vals.length) return null;
-    var t = vals.join(' ');
-    return inferByFlag(t) || inferByCode(t) || inferByKeyword(t);
-  }
-  function inferByTld(server) {
-    var m = String(server || '').toLowerCase().match(/\.([a-z]{2})(?:\.|$)/);
-    if (m) {
-      var c = m[1].toUpperCase(); if (c === 'UK') c = 'GB';
-      if (CODE_TO_NAME[c]) return { code: c, name: CODE_TO_NAME[c], source: 'server-tld', confidence: 0.45 };
-    }
-    return null;
-  }
-  function isCdnLike(name, server, extra) {
-    var t = [name, server, extra && (extra.Host || extra.host || extra.servername || extra.sni)].join(' ');
-    if (/CF中转|Cloudflare|Anycast|CDN|优选|优选IP/i.test(t)) return true;
-    if (/^(104\.(1[6-9]|2[0-9]|3[0-1])\.|172\.(6[4-9]|7[0-1])\.|162\.159\.)/.test(String(server || ''))) return true;
-    return false;
-  }
-  function inferCountry(name, server, extra) {
-    extra = extra || {};
-    var textName = String(name || '');
-    var textFull = [extra.country, extra.countryCode, name, extra.name, server].join(' ');
-    var r = inferByExtraCountry(extra) || inferByFlag(textName) || inferByKeyword(textName);
-    if (r) return r;
-    var c1 = inferByCode(textName);
-    if (c1 && !(c1.code === 'CF' && isCdnLike(name, server, extra))) return c1;
-    var r2 = inferByKeyword(textFull);
-    if (r2) return r2;
-    var c2 = inferByCode(textFull);
-    if (c2 && !(c2.code === 'CF' && isCdnLike(name, server, extra))) return c2;
-    var tld = inferByTld(server);
-    if (tld) return tld;
-    if (isCdnLike(name, server, extra)) return { code: 'CDN', name: 'CDN/中转', source: 'cdn-hint', confidence: 0.35 };
-    return { code: 'UN', name: '未知', source: 'unknown', confidence: 0 };
-  }
-
-  function parseHostPort(s) {
-    s = String(s || '').trim().split('/')[0];
-    if (!s) return { server: '', port: '' };
-    if (s.charAt(0) === '[') {
-      var end = s.indexOf(']'), host = end >= 0 ? s.slice(1, end) : s, rest = end >= 0 ? s.slice(end + 1) : '';
-      return { server: host, port: rest.charAt(0) === ':' ? rest.slice(1) : '' };
-    }
-    var parts = s.split(':');
-    if (parts.length > 1) { var port = parts.pop(); return { server: parts.join(':'), port: port }; }
-    return { server: s, port: '' };
-  }
-  function parseUrlParams(q) {
-    var out = {}; if (!q) return out;
-    q.split('&').forEach(function (part) {
-      var idx = part.indexOf('='), k = safeDecodeURIComponent(idx >= 0 ? part.slice(0, idx) : part), v = safeDecodeURIComponent(idx >= 0 ? part.slice(idx + 1) : '');
-      if (k) out[k] = v;
-    });
-    return out;
-  }
-  function fingerprintNode(n) {
-    return [n.protocol, String(n.server || '').toLowerCase(), String(n.port || ''), String(n.network || '').toLowerCase(), String(n.tls || '').toLowerCase()].join('|');
-  }
-  function makeNode(x) {
-    x = x || {};
-    var extra = x.extra || {};
-    var country = inferCountry(x.name, x.server, extra);
-    var node = {
-      id: x.id || '',
-      name: x.name || x.ps || x.remarks || x.server || '未命名节点',
-      protocol: String(x.protocol || x.type || 'unknown').toLowerCase(),
-      server: x.server || x.add || '',
-      port: x.port || '',
-      network: x.network || x.net || x.transport || '',
-      tls: x.tls || x.security || '',
-      countryCode: country.code,
-      country: country.name,
-      countrySource: country.source,
-      countryConfidence: country.confidence,
-      sourceFormat: x.sourceFormat || '',
-      raw: x.raw || '',
-      extra: extra
-    };
-    node.fingerprint = fingerprintNode(node);
-    return node;
-  }
-
-  function parseVmess(url) {
-    var payload = String(url).replace(/^vmess:\/\//i, '').split('#')[0].trim(), json = base64Decode(payload);
+  function parseURI(line) {
+    line = clean(line); if (!line) return null;
+    var m = line.match(/^([a-z0-9+.-]+):\/\//i); if (!m) return null;
+    var proto = m[1].toLowerCase(), rest = line.slice(m[0].length), obj = { type: proto };
     try {
-      var obj = JSON.parse(json);
-      return makeNode({ protocol: 'vmess', name: obj.ps || obj.name || '', server: obj.add || obj.server || '', port: obj.port || '', network: obj.net || obj.type || '', tls: obj.tls || obj.security || '', sourceFormat: 'uri', raw: url, extra: obj });
-    } catch (e) {
-      return makeNode({ protocol: 'vmess', name: 'vmess 解析失败', sourceFormat: 'uri', raw: url, extra: { error: String(e), payload: json.slice(0, 120) } });
-    }
+      if (proto === 'vmess') {
+        var json = atobSafe(rest); obj = JSON.parse(json); obj.type = 'vmess'; return setFingerprint(buildNode(obj, 'uri', line));
+      }
+      var name = '';
+      var hash = rest.indexOf('#'); if (hash >= 0) { name = decodeURIComponentSafe(rest.slice(hash + 1)); rest = rest.slice(0, hash); }
+      var query = ''; var qi = rest.indexOf('?'); if (qi >= 0) { query = rest.slice(qi + 1); rest = rest.slice(0, qi); }
+      if (proto === 'ss') {
+        var decoded = rest.indexOf('@') >= 0 ? rest : atobSafe(rest);
+        var at = decoded.lastIndexOf('@'); var hp = at >= 0 ? decoded.slice(at + 1) : decoded;
+        obj.server = hp.split(':')[0]; obj.port = hp.split(':')[1] || ''; obj.name = name; obj.type = 'ss'; return setFingerprint(buildNode(obj, 'uri', line));
+      }
+      var at2 = rest.lastIndexOf('@'); var hp2 = at2 >= 0 ? rest.slice(at2 + 1) : rest;
+      obj.server = hp2.split(':')[0]; obj.port = hp2.split(':')[1] || ''; obj.name = name; obj.type = proto;
+      query.split('&').forEach(function (p) { var kv = p.split('='); if (kv[0]) obj[decodeURIComponentSafe(kv[0])] = decodeURIComponentSafe(kv.slice(1).join('=')); });
+      obj.network = obj.type || obj.network || obj.net || '';
+      obj.tls = obj.security || obj.tls || '';
+      return setFingerprint(buildNode(obj, 'uri', line));
+    } catch (e) { return null; }
   }
-  function parseSSR(url) {
-    var payload = String(url).replace(/^ssr:\/\//i, '').trim(), decoded = base64Decode(payload), parts = decoded.split('/?'), main = parts[0] || '', params = parseUrlParams(parts[1] || ''), seg = main.split(':'), name = params.remarks ? base64Decode(params.remarks) : '';
-    return makeNode({ protocol: 'ssr', name: name || seg[0] || 'ssr', server: seg[0] || '', port: seg[1] || '', network: params.obfs || seg[4] || '', tls: '', sourceFormat: 'uri', raw: url, extra: { protocol: seg[2], method: seg[3], obfs: seg[4] } });
+  function parseSubscription(text) {
+    text = maybeDecodeBase64(text);
+    var nodes = [];
+    if (/proxies\s*:/i.test(text) || /^\s*-\s*name\s*:/m.test(text)) nodes = nodes.concat(parseClash(text));
+    String(text || '').split(/\r?\n/).forEach(function (line) { var n = parseURI(line); if (n) nodes.push(n); });
+    return analyzeNodes(nodes);
   }
-  function parseSS(url) {
-    var raw = String(url), body = raw.replace(/^ss:\/\//i, ''), hash = '', hidx = body.indexOf('#');
-    if (hidx >= 0) { hash = safeDecodeURIComponent(body.slice(hidx + 1)); body = body.slice(0, hidx); }
-    var qidx = body.indexOf('?'); if (qidx >= 0) body = body.slice(0, qidx);
-    var main = body;
-    if (main.indexOf('@') < 0) { var decoded = base64Decode(main); if (decoded.indexOf('@') >= 0) main = decoded; }
-    else { var left = main.split('@')[0]; if (left.indexOf(':') < 0) main = base64Decode(left) + '@' + main.split('@').slice(1).join('@'); }
-    var hp = parseHostPort(main.split('@').pop());
-    var extra = {}, methodPart = main.indexOf('@') >= 0 ? main.split('@')[0] : '';
-    if (methodPart.indexOf(':') >= 0) extra.method = safeDecodeURIComponent(methodPart.split(':')[0]);
-    return makeNode({ protocol: 'ss', name: hash || hp.server, server: hp.server, port: hp.port, sourceFormat: 'uri', raw: url, extra: extra });
+  function analyzeNodes(nodes) {
+    nodes = nodes || [];
+    var seen = {}, dupMap = {}, unique = [];
+    nodes.forEach(function (n) { setFingerprint(n); if (!seen[n.fingerprint]) { seen[n.fingerprint] = true; unique.push(n); } else { if (!dupMap[n.fingerprint]) dupMap[n.fingerprint] = [n]; dupMap[n.fingerprint].push(n); } });
+    var byP = {}, byC = {}, byCC = {}, byF = {};
+    nodes.forEach(function (n) { byP[n.protocol] = (byP[n.protocol] || 0) + 1; byC[n.country] = (byC[n.country] || 0) + 1; byCC[n.countryCode] = (byCC[n.countryCode] || 0) + 1; byF[n.sourceFormat] = (byF[n.sourceFormat] || 0) + 1; });
+    function toArr(o) { return Object.keys(o).map(function (k) { return { key: k, count: o[k] }; }).sort(function (a,b) { return b.count - a.count; }); }
+    var dups = Object.keys(dupMap).map(function (k) { return { fingerprint: k, count: dupMap[k].length, nodes: dupMap[k] }; });
+    return { summary: { total: nodes.length, unique: unique.length, duplicates: nodes.length - unique.length, protocols: Object.keys(byP).length, countries: Object.keys(byC).length }, stats: { byProtocol: toArr(byP), byCountry: toArr(byC), byCountryCode: toArr(byCC), bySourceFormat: toArr(byF) }, duplicates: dups, nodes: nodes, meta: { version: VERSION, marker: MARKER, generatedAt: nowIso() } };
   }
-  function parseGenericUri(url) {
-    var raw = String(url), m = raw.match(/^([a-z0-9+.-]+):\/\//i), protocol = m ? m[1].toLowerCase() : 'unknown', body = raw.replace(/^[a-z0-9+.-]+:\/\//i, ''), name = '';
-    var hidx = body.indexOf('#'); if (hidx >= 0) { name = safeDecodeURIComponent(body.slice(hidx + 1)); body = body.slice(0, hidx); }
-    var query = '', qidx = body.indexOf('?'); if (qidx >= 0) { query = body.slice(qidx + 1); body = body.slice(0, qidx); }
-    var authority = body.split('/')[0], hostPart = authority.indexOf('@') >= 0 ? authority.split('@').pop() : authority, hp = parseHostPort(hostPart), params = parseUrlParams(query);
-    return makeNode({ protocol: protocol === 'hy2' ? 'hysteria2' : protocol, name: name || params.name || hp.server, server: hp.server, port: hp.port, network: params.type || params.network || params.transport || '', tls: params.security || params.tls || '', sourceFormat: 'uri', raw: url, extra: params });
-  }
-  function parseUri(url) {
-    if (/^vmess:\/\//i.test(url)) return parseVmess(url);
-    if (/^ssr:\/\//i.test(url)) return parseSSR(url);
-    if (/^ss:\/\//i.test(url)) return parseSS(url);
-    return parseGenericUri(url);
-  }
-  function clashToNode(obj) {
-    obj = obj || {};
-    return makeNode({ protocol: obj.type || obj.protocol || 'unknown', name: obj.name || obj.server || '未命名节点', server: obj.server || obj.add || '', port: obj.port || '', network: obj.network || obj.type_transport || obj.transport || '', tls: obj.tls || obj.security || '', sourceFormat: 'clash-yaml', raw: JSON.stringify(obj), extra: obj });
-  }
-  function extractUris(text) {
-    var re = /\b(vmess|vless|trojan|ssr|ss|hysteria2|hy2|hysteria|tuic|snell|socks5|socks):\/\/[^\s"'<>\\]+/ig, out = [], m;
-    while ((m = re.exec(String(text || '')))) out.push(m[0].replace(/[),;]+$/, ''));
-    return out;
-  }
-  function parseSubscription(raw) {
-    var normalized = maybeDecodeWhole(raw), nodes = [];
-    if (/proxies\s*:/i.test(normalized)) nodes = nodes.concat(parseClashProxies(normalized));
-    var lineUris = [];
-    normalized.split(/\r?\n/).forEach(function (line) {
-      line = line.trim(); if (!line || line.charAt(0) === '#') return;
-      if (/^(vmess|vless|trojan|ssr|ss|hysteria2|hy2|hysteria|tuic|snell|socks5|socks):\/\//i.test(line)) lineUris.push(line);
-    });
-    var uris = lineUris.length ? lineUris : extractUris(normalized);
-    for (var i = 0; i < uris.length; i++) nodes.push(parseUri(uris[i]));
-    var seenRaw = {}, clean = [];
-    nodes.forEach(function (n) { var key = n.raw || (n.protocol + n.name + n.server + n.port); if (seenRaw[key]) return; seenRaw[key] = true; clean.push(n); });
-    return { normalizedText: normalized, nodes: clean };
-  }
-  function countBy(nodes, key) {
-    var map = {};
-    nodes.forEach(function (n) { var k = n[key] || '未知'; map[k] = (map[k] || 0) + 1; });
-    return Object.keys(map).sort(function (a, b) { return map[b] - map[a] || String(a).localeCompare(String(b)); }).map(function (k) { return { key: k, count: map[k] }; });
-  }
-  function duplicateGroups(nodes) {
-    var map = {};
-    nodes.forEach(function (n) { if (!map[n.fingerprint]) map[n.fingerprint] = []; map[n.fingerprint].push(n); });
-    return Object.keys(map).filter(function (k) { return map[k].length > 1; }).sort(function (a, b) { return map[b].length - map[a].length; }).map(function (k) { return { fingerprint: k, count: map[k].length, nodes: map[k] }; });
-  }
-  function analyze(raw, meta) {
-    meta = meta || {};
-    var parsed = parseSubscription(raw), nodes = parsed.nodes, dupGroups = duplicateGroups(nodes);
-    var uniqueCount = nodes.length - dupGroups.reduce(function (acc, g) { return acc + g.count - 1; }, 0);
-    return {
-      ok: true, version: VERSION, marker: MARKER, generatedAt: nowIso(), source: meta.source || '', size: String(raw || '').length, normalizedSize: parsed.normalizedText.length,
-      summary: { total: nodes.length, unique: uniqueCount, duplicates: nodes.length - uniqueCount, protocols: countBy(nodes, 'protocol').length, countries: countBy(nodes, 'country').length, unknown: nodes.filter(function(n){ return n.countryCode === 'UN'; }).length },
-      stats: { byProtocol: countBy(nodes, 'protocol'), byCountry: countBy(nodes, 'country'), byCountryCode: countBy(nodes, 'countryCode'), byCountrySource: countBy(nodes, 'countrySource'), bySourceFormat: countBy(nodes, 'sourceFormat') },
-      duplicates: dupGroups, nodes: nodes
-    };
-  }
-  function fetchUrl(url, callback) {
-    if (typeof $httpClient === 'undefined') { callback(new Error('当前环境没有 $httpClient，仅 Surge 脚本运行时可拉取远程订阅。'), null, null); return; }
-    $httpClient.get({ url: url, headers: { 'User-Agent': 'SubViz-Surge/' + VERSION, 'Accept': '*/*' } }, function (err, resp, body) {
-      if (err) return callback(err, resp, body);
-      var code = resp && (resp.status || resp.statusCode);
-      if (code && (code < 200 || code >= 400)) return callback(new Error('订阅请求失败：HTTP ' + code), resp, body);
-      callback(null, resp, body || '');
+  function fetchURL(url) {
+    if (!url) return respondJSON({ ok: false, error: 'missing url' }, 400);
+    $httpClient.get({ url: url, timeout: 30, headers: { 'User-Agent': 'SubViz/' + VERSION } }, function (err, resp, data) {
+      if (err) return respondJSON({ ok: false, error: String(err) }, 502);
+      try { var result = parseSubscription(data || ''); result.ok = true; result.sourceUrl = url; respondJSON(result); }
+      catch (e) { respondJSON({ ok: false, error: String(e && e.stack || e) }, 500); }
     });
   }
-  function handleAnalyzeByUrl(url) {
-    if (!/^https?:\/\//i.test(url || '')) { respondJSON({ ok: false, error: '请输入 http/https 订阅链接。' }, 400); return; }
-    fetchUrl(url, function (err, resp, body) {
-      if (err) { respondJSON({ ok: false, error: String(err.message || err) }, 502); return; }
-      try { respondJSON(analyze(body, { source: url })); } catch (e) { respondJSON({ ok: false, error: String(e && e.stack || e) }, 500); }
-    });
-  }
-  function handleAnalyzeText(body) {
-    try {
-      var raw = body || '', source = 'pasted-text';
-      if (/^\s*\{/.test(raw)) { var obj = JSON.parse(raw); raw = obj.raw || obj.text || ''; source = obj.sourceName || source; }
-      if (!raw) { respondJSON({ ok: false, error: '没有收到订阅内容。' }, 400); return; }
-      respondJSON(analyze(raw, { source: source }));
-    } catch (e) { respondJSON({ ok: false, error: String(e && e.stack || e) }, 500); }
-  }
-  function handleSample() {
-    var vmess = 'vmess://' + b64(JSON.stringify({ v: '2', ps: '🇭🇰HK-香港 01', add: 'hk.example.com', port: '443', id: 'demo', aid: '0', net: 'ws', type: 'none', host: '', path: '/ws', tls: 'tls' }));
-    var sample = [vmess, 'trojan://password@jp.example.com:443?security=tls#🇯🇵JP-日本 01', 'vless://uuid@sg.example.com:443?encryption=none&security=tls&type=ws#🇸🇬SG-新加坡 01', 'ss://' + b64('aes-128-gcm:pass@us.example.com:8388') + '#🇺🇸US-美国 01', 'trojan://password@jp.example.com:443?security=tls#🇯🇵JP-日本 01 副本', 'vless://uuid@cf.example.com:443?encryption=none&security=tls&type=ws#CF中转节点'].join('\n');
-    respondJSON(analyze(sample, { source: 'demo-sample' }));
+  function sampleText() {
+    return 'proxies:\n' +
+      '  - name: "\\ud83c\\uddf8\\ud83c\\uddecSG_1|demo"\n    type: trojan\n    server: ppg-sg.example.com\n    port: 443\n    network: ws\n    tls: true\n' +
+      '  - name: "\\ud83c\\uddfa\\ud83c\\uddf8US_1|demo"\n    type: vless\n    server: 104.19.1.1\n    port: 443\n    network: ws\n    tls: true\n' +
+      '  - name: "SE_1 demo"\n    type: ss\n    server: 1.2.3.4\n    port: 8388\n';
   }
 
-  function htmlPage() {
-    var css = '<style>' +
-      '*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;background:#071226;color:#eaf2ff}body:before{content:"";position:fixed;inset:0;background:radial-gradient(circle at 20% 0%,rgba(80,140,255,.28),transparent 32%),radial-gradient(circle at 90% 10%,rgba(26,214,255,.16),transparent 30%);pointer-events:none}.wrap{position:relative;max-width:1180px;margin:0 auto;padding:32px 18px 70px}.hero{background:linear-gradient(135deg,rgba(20,42,78,.92),rgba(8,18,38,.92));border:1px solid rgba(120,160,220,.26);border-radius:28px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:30px}.muted{color:#9fb1cc}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(117,168,255,.35);background:rgba(50,103,180,.18);border-radius:999px;padding:6px 10px;color:#bcd8ff;font-size:13px}.panel{margin-top:18px;background:rgba(9,24,50,.78);border:1px solid rgba(105,150,210,.24);border-radius:24px;padding:18px}.row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center}input,textarea,select,button{font:inherit;border-radius:18px;border:1px solid rgba(120,165,230,.28);background:#071225;color:#eaf2ff;padding:13px 15px;outline:none}textarea{width:100%;min-height:110px;resize:vertical;margin-top:10px}button{cursor:pointer;background:linear-gradient(135deg,#2e7cf7,#13b7ff);border:none;font-weight:800}button.secondary{background:rgba(255,255,255,.09);border:1px solid rgba(120,165,230,.26)}button:active{transform:translateY(1px)}.status{margin-top:12px;white-space:pre-wrap;color:#b8c8e3}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:18px}.card{background:rgba(255,255,255,.07);border:1px solid rgba(120,165,230,.18);border-radius:20px;padding:16px}.num{font-size:28px;font-weight:900}.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px}.bar{display:grid;grid-template-columns:95px 1fr 48px;gap:10px;align-items:center;margin:9px 0}.barline{height:10px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}.barline i{display:block;height:100%;background:linear-gradient(90deg,#2e7cf7,#14d6ff);border-radius:999px}.tools{display:grid;grid-template-columns:1fr 160px 160px auto auto auto;gap:10px;align-items:center}.check{display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}.check input{width:22px;height:22px;accent-color:#188cff;padding:0}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:13px 10px;border-bottom:1px solid rgba(130,160,210,.16);text-align:left;vertical-align:middle;word-break:break-all}th{color:#bfd3ef;font-size:13px}.pill{display:inline-flex;border:1px solid rgba(90,160,220,.36);background:rgba(64,130,190,.22);border-radius:999px;padding:5px 10px;font-weight:800;color:#cfe9ff}.small{font-size:12px;color:#8ea1bf}.dup{margin:10px 0;padding:12px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}@media(max-width:760px){.wrap{padding:18px 12px}.row{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,1fr)}.charts{grid-template-columns:1fr}.tools{grid-template-columns:1fr}.check{justify-content:flex-start}th:nth-child(4),td:nth-child(4),th:nth-child(7),td:nth-child(7){display:none}h1{font-size:25px}.hero{padding:18px}.panel{padding:14px}table{font-size:14px}}</style>';
-    var js = '<script>eval(atob("dmFyIGxhc3QgPSBudWxsOwp2YXIgZmlsdGVyZWQgPSBbXTsKdmFyIHVuaXF1ZU9ubHkgPSBmYWxzZTsKZnVuY3Rpb24gcXMoaWQpeyByZXR1cm4gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoaWQpOyB9CmZ1bmN0aW9uIHN0YXR1cyh0KXsgdmFyIGVsID0gcXMoJ3N0YXR1cycpOyBpZiAoZWwpIGVsLnRleHRDb250ZW50ID0gdDsgfQpmdW5jdGlvbiBlc2Mocyl7IHJldHVybiBTdHJpbmcocyA9PSBudWxsID8gJycgOiBzKS5yZXBsYWNlKC9bJjw+Il0vZywgZnVuY3Rpb24oYyl7IHJldHVybiB7JyYnOicmYW1wOycsJzwnOicmbHQ7JywnPic6JyZndDsnLCciJzonJnF1b3Q7J31bY10gfHwgYzsgfSk7IH0KZnVuY3Rpb24gc2V0QnVzeSh0KXsgc3RhdHVzKHQgfHwgJ+WkhOeQhuS4reKApuKApicpOyB9CmZ1bmN0aW9uIGFwaUpzb24odXJsLCBvcHQpewogIG9wdCA9IG9wdCB8fCB7fTsKICBpZiAodHlwZW9mIGZldGNoID09PSAnZnVuY3Rpb24nKSB7CiAgICByZXR1cm4gZmV0Y2godXJsLCBvcHQpLnRoZW4oZnVuY3Rpb24ocil7IHJldHVybiByLnRleHQoKS50aGVuKGZ1bmN0aW9uKHQpewogICAgICB0cnkgeyByZXR1cm4gSlNPTi5wYXJzZSh0KTsgfSBjYXRjaChlKSB7IHRocm93IG5ldyBFcnJvcih0IHx8ICgnSFRUUCAnICsgci5zdGF0dXMpKTsgfQogICAgfSk7IH0pOwogIH0KICByZXR1cm4gbmV3IFByb21pc2UoZnVuY3Rpb24ocmVzb2x2ZSwgcmVqZWN0KXsKICAgIHZhciB4ID0gbmV3IFhNTEh0dHBSZXF1ZXN0KCk7CiAgICB4Lm9wZW4ob3B0Lm1ldGhvZCB8fCAnR0VUJywgdXJsLCB0cnVlKTsKICAgIHZhciBoID0gb3B0LmhlYWRlcnMgfHwge307CiAgICBPYmplY3Qua2V5cyhoKS5mb3JFYWNoKGZ1bmN0aW9uKGspeyB4LnNldFJlcXVlc3RIZWFkZXIoaywgaFtrXSk7IH0pOwogICAgeC5vbmxvYWQgPSBmdW5jdGlvbigpeyB0cnkgeyByZXNvbHZlKEpTT04ucGFyc2UoeC5yZXNwb25zZVRleHQpKTsgfSBjYXRjaChlKSB7IHJlamVjdChuZXcgRXJyb3IoeC5yZXNwb25zZVRleHQgfHwgKCdIVFRQICcgKyB4LnN0YXR1cykpKTsgfSB9OwogICAgeC5vbmVycm9yID0gZnVuY3Rpb24oKXsgcmVqZWN0KG5ldyBFcnJvcign572R57uc6K+35rGC5aSx6LSlJykpOyB9OwogICAgeC5zZW5kKG9wdC5ib2R5IHx8IG51bGwpOwogIH0pOwp9CmZ1bmN0aW9uIGxvYWRVcmwoKXsKICBzdGF0dXMoJ+aMiemSruW3suinpuWPke+8jOWHhuWkh+aLieWPluKApuKApicpOwogIHZhciB1ID0gcXMoJ3VybCcpLnZhbHVlLnRyaW0oKTsKICBpZiAoIXUpIHsgc3RhdHVzKCfor7flhYjovpPlhaXorqLpmIUgVVJM44CCJyk7IHJldHVybjsgfQogIHNldEJ1c3koJ+ato+WcqOaLieWPluiuoumYheW5tuino+aekOKApuKApicpOwogIGFwaUpzb24oJy9hcGkvYW5hbHl6ZT91cmw9JyArIGVuY29kZVVSSUNvbXBvbmVudCh1KSkudGhlbihyZW5kZXIpLmNhdGNoKGZ1bmN0aW9uKGUpeyBzdGF0dXMoJ+aLieWPluWksei0pe+8micgKyBlLm1lc3NhZ2UpOyB9KTsKfQpmdW5jdGlvbiBsb2FkVGV4dCgpewogIHN0YXR1cygn5oyJ6ZKu5bey6Kem5Y+R77yM5YeG5aSH6Kej5p6Q57KY6LS05YaF5a654oCm4oCmJyk7CiAgdmFyIHQgPSBxcygncmF3JykudmFsdWUgfHwgJyc7CiAgaWYgKCF0LnRyaW0oKSkgeyBzdGF0dXMoJ+ivt+WFiOeymOi0tOiuoumYheWOn+aWh+aIliBDbGFzaCBZQU1M44CCJyk7IHJldHVybjsgfQogIHNldEJ1c3koJ+ato+WcqOino+aekOeymOi0tOWGheWuueKApuKApicpOwogIGFwaUpzb24oJy9hcGkvYW5hbHl6ZS10ZXh0JywgeyBtZXRob2Q6J1BPU1QnLCBoZWFkZXJzOnsnQ29udGVudC1UeXBlJzonYXBwbGljYXRpb24vanNvbid9LCBib2R5OkpTT04uc3RyaW5naWZ5KHtyYXc6dH0pIH0pLnRoZW4ocmVuZGVyKS5jYXRjaChmdW5jdGlvbihlKXsgc3RhdHVzKCfop6PmnpDlpLHotKXvvJonICsgZS5tZXNzYWdlKTsgfSk7Cn0KZnVuY3Rpb24gbG9hZFNhbXBsZSgpewogIHN0YXR1cygn5oyJ6ZKu5bey6Kem5Y+R77yM5q2j5Zyo6L295YWl5ryU56S65pWw5o2u4oCm4oCmJyk7CiAgYXBpSnNvbignL2FwaS9zYW1wbGUnKS50aGVuKHJlbmRlcikuY2F0Y2goZnVuY3Rpb24oZSl7IHN0YXR1cygn5ryU56S65pWw5o2u5aSx6LSl77yaJyArIGUubWVzc2FnZSk7IH0pOwp9CmZ1bmN0aW9uIGNhcmRzKHMpewogIHZhciBhcnIgPSBbWyfmgLvoioLngrknLHMudG90YWxdLFsn5ZSv5LiA6IqC54K5JyxzLnVuaXF1ZV0sWyfph43lpI3oioLngrknLHMuZHVwbGljYXRlc10sWyfljY/orq7mlbAnLHMucHJvdG9jb2xzXSxbJ+acquefpScscy51bmtub3duIHx8IDBdXTsKICBxcygnY2FyZHMnKS5pbm5lckhUTUwgPSBhcnIubWFwKGZ1bmN0aW9uKHgpeyByZXR1cm4gJzxkaXYgY2xhc3M9ImNhcmQiPjxkaXYgY2xhc3M9Im11dGVkIj4nICsgeFswXSArICc8L2Rpdj48ZGl2IGNsYXNzPSJudW0iPicgKyB4WzFdICsgJzwvZGl2PjwvZGl2Pic7IH0pLmpvaW4oJycpOwp9CmZ1bmN0aW9uIGJhcnMoaWQsIGFycil7CiAgYXJyID0gYXJyIHx8IFtdOwogIHZhciBtYXggPSAxOwogIGFyci5mb3JFYWNoKGZ1bmN0aW9uKHgpeyBpZiAoeC5jb3VudCA+IG1heCkgbWF4ID0geC5jb3VudDsgfSk7CiAgcXMoaWQpLmlubmVySFRNTCA9IGFyci5zbGljZSgwLDEyKS5tYXAoZnVuY3Rpb24oeCl7CiAgICB2YXIgdyA9IE1hdGgubWF4KDMsIE1hdGgucm91bmQoeC5jb3VudCAvIG1heCAqIDEwMCkpOwogICAgcmV0dXJuICc8ZGl2IGNsYXNzPSJiYXIiPjxkaXY+JyArIGVzYyh4LmtleSkgKyAnPC9kaXY+PGRpdiBjbGFzcz0iYmFybGluZSI+PGkgc3R5bGU9IndpZHRoOicgKyB3ICsgJyUiPjwvaT48L2Rpdj48ZGl2PicgKyB4LmNvdW50ICsgJzwvZGl2PjwvZGl2Pic7CiAgfSkuam9pbignJykgfHwgJzxwIGNsYXNzPSJtdXRlZCI+5pqC5peg5pWw5o2uPC9wPic7Cn0KZnVuY3Rpb24gZmlsbEZpbHRlcnMoKXsKICB2YXIgcHMgPSB7fSwgY3MgPSB7fTsKICAobGFzdC5ub2RlcyB8fCBbXSkuZm9yRWFjaChmdW5jdGlvbihuKXsgcHNbbi5wcm90b2NvbCB8fCAn5pyq55+lJ10gPSAxOyBjc1tuLmNvdW50cnkgfHwgJ+acquefpSddID0gMTsgfSk7CiAgcXMoJ3Byb3RvY29sJykuaW5uZXJIVE1MID0gJzxvcHRpb24gdmFsdWU9IiI+5YWo6YOo5Y2P6K6uPC9vcHRpb24+JyArIE9iamVjdC5rZXlzKHBzKS5zb3J0KCkubWFwKGZ1bmN0aW9uKGspeyByZXR1cm4gJzxvcHRpb24gdmFsdWU9IicgKyBlc2MoaykgKyAnIj4nICsgZXNjKGspICsgJzwvb3B0aW9uPic7IH0pLmpvaW4oJycpOwogIHFzKCdjb3VudHJ5JykuaW5uZXJIVE1MID0gJzxvcHRpb24gdmFsdWU9IiI+5YWo6YOo5Zyw5Yy6PC9vcHRpb24+JyArIE9iamVjdC5rZXlzKGNzKS5zb3J0KCkubWFwKGZ1bmN0aW9uKGspeyByZXR1cm4gJzxvcHRpb24gdmFsdWU9IicgKyBlc2MoaykgKyAnIj4nICsgZXNjKGspICsgJzwvb3B0aW9uPic7IH0pLmpvaW4oJycpOwp9CmZ1bmN0aW9uIGFwcGx5KCl7CiAgaWYgKCFsYXN0KSByZXR1cm47CiAgdmFyIHEgPSBxcygnc2VhcmNoJykudmFsdWUudG9Mb3dlckNhc2UoKTsKICB2YXIgcCA9IHFzKCdwcm90b2NvbCcpLnZhbHVlOwogIHZhciBjID0gcXMoJ2NvdW50cnknKS52YWx1ZTsKICB2YXIgc2VlbiA9IHt9OwogIGZpbHRlcmVkID0gKGxhc3Qubm9kZXMgfHwgW10pLmZpbHRlcihmdW5jdGlvbihuKXsKICAgIGlmIChwICYmIG4ucHJvdG9jb2wgIT09IHApIHJldHVybiBmYWxzZTsKICAgIGlmIChjICYmIG4uY291bnRyeSAhPT0gYykgcmV0dXJuIGZhbHNlOwogICAgdmFyIGhheSA9IFtuLm5hbWUsbi5zZXJ2ZXIsbi5jb3VudHJ5LG4ucHJvdG9jb2wsbi5jb3VudHJ5Q29kZV0uam9pbignICcpLnRvTG93ZXJDYXNlKCk7CiAgICBpZiAocSAmJiBoYXkuaW5kZXhPZihxKSA8IDApIHJldHVybiBmYWxzZTsKICAgIGlmICh1bmlxdWVPbmx5KSB7IGlmIChzZWVuW24uZmluZ2VycHJpbnRdKSByZXR1cm4gZmFsc2U7IHNlZW5bbi5maW5nZXJwcmludF0gPSAxOyB9CiAgICByZXR1cm4gdHJ1ZTsKICB9KTsKICByZW5kZXJUYWJsZSgpOwp9CmZ1bmN0aW9uIHJlbmRlclRhYmxlKCl7CiAgcXMoJ2NvdW50JykudGV4dENvbnRlbnQgPSAn5b2T5YmN5pi+56S6ICcgKyBmaWx0ZXJlZC5sZW5ndGggKyAnIC8gJyArIChsYXN0Lm5vZGVzIHx8IFtdKS5sZW5ndGggKyAnIOS4quiKgueCuSc7CiAgdmFyIHJvd3MgPSBmaWx0ZXJlZC5zbGljZSgwLCA4MDApLm1hcChmdW5jdGlvbihuLCBpKXsKICAgIHZhciB0bHMgPSAobi5uZXR3b3JrIHx8ICcnKSArIChuLnRscyA/ICcgLyAnICsgbi50bHMgOiAnJyk7CiAgICB2YXIgc3JjID0gbi5jb3VudHJ5U291cmNlICYmIG4uY291bnRyeVNvdXJjZSAhPT0gJ3Vua25vd24nID8gJzxkaXYgY2xhc3M9InNtYWxsIj7or4bliKvvvJonICsgZXNjKG4uY291bnRyeVNvdXJjZSkgKyAnPC9kaXY+JyA6ICcnOwogICAgcmV0dXJuICc8dHI+PHRkPicgKyAoaSsxKSArICc8L3RkPjx0ZD4nICsgZXNjKG4ubmFtZSkgKyAnPC90ZD48dGQ+PHNwYW4gY2xhc3M9InBpbGwiPicgKyBlc2Mobi5wcm90b2NvbCkgKyAnPC9zcGFuPjwvdGQ+PHRkPicgKyBlc2Mobi5jb3VudHJ5KSArICcgPHNwYW4gY2xhc3M9InNtYWxsIj4nICsgZXNjKG4uY291bnRyeUNvZGUpICsgJzwvc3Bhbj4nICsgc3JjICsgJzwvdGQ+PHRkPicgKyBlc2Mobi5zZXJ2ZXIpICsgJzwvdGQ+PHRkPicgKyBlc2Mobi5wb3J0KSArICc8L3RkPjx0ZD4nICsgZXNjKHRscykgKyAnPGRpdiBjbGFzcz0ic21hbGwiPicgKyBlc2Mobi5maW5nZXJwcmludCkgKyAnPC9kaXY+PC90ZD48L3RyPic7CiAgfSkuam9pbignJyk7CiAgcXMoJ3Rib2R5JykuaW5uZXJIVE1MID0gcm93cyB8fCAnPHRyPjx0ZCBjb2xzcGFuPSI3IiBjbGFzcz0ibXV0ZWQiPuaaguaXoOaVsOaNrjwvdGQ+PC90cj4nOwp9CmZ1bmN0aW9uIHJlbmRlckR1cCgpewogIHZhciBkID0gbGFzdC5kdXBsaWNhdGVzIHx8IFtdOwogIHFzKCdkdXBzJykuaW5uZXJIVE1MID0gZC5sZW5ndGggPyBkLnNsaWNlKDAsMzApLm1hcChmdW5jdGlvbihnKXsKICAgIHJldHVybiAnPGRpdiBjbGFzcz0iZHVwIj48Yj4nICsgZXNjKGcuZmluZ2VycHJpbnQpICsgJzwvYj48ZGl2IGNsYXNzPSJzbWFsbCI+6YeN5aSNICcgKyBnLmNvdW50ICsgJyDkuKo8L2Rpdj4nICsgKGcubm9kZXMgfHwgW10pLm1hcChmdW5jdGlvbihuKXsgcmV0dXJuICc8ZGl2PsK3ICcgKyBlc2Mobi5uYW1lKSArICc8L2Rpdj4nOyB9KS5qb2luKCcnKSArICc8L2Rpdj4nOwogIH0pLmpvaW4oJycpIDogJzxwIGNsYXNzPSJtdXRlZCI+5pqC5peg6YeN5aSN6IqC54K544CCPC9wPic7Cn0KZnVuY3Rpb24gcmVuZGVyKGRhdGEpewogIGlmICghZGF0YSB8fCAhZGF0YS5vaykgeyBzdGF0dXMoJ+ino+aekOWksei0pe+8micgKyAoZGF0YSAmJiBkYXRhLmVycm9yID8gZGF0YS5lcnJvciA6ICfmnKrnn6XplJnor68nKSk7IHJldHVybjsgfQogIGxhc3QgPSBkYXRhOwogIGNhcmRzKGRhdGEuc3VtbWFyeSB8fCB7fSk7CiAgYmFycygncHJvdG9jb2xDaGFydCcsIGRhdGEuc3RhdHMuYnlQcm90b2NvbCB8fCBbXSk7CiAgYmFycygnY291bnRyeUNoYXJ0JywgZGF0YS5zdGF0cy5ieUNvdW50cnkgfHwgW10pOwogIGZpbGxGaWx0ZXJzKCk7CiAgc3RhdHVzKCfop6PmnpDlrozmiJDjgILniYjmnKzvvJonICsgZGF0YS52ZXJzaW9uICsgJ++8jOacquefpeiKgueCue+8micgKyAoKGRhdGEuc3VtbWFyeSAmJiBkYXRhLnN1bW1hcnkudW5rbm93bikgfHwgMCkpOwogIHVuaXF1ZU9ubHkgPSBmYWxzZTsKICBxcygndW5pcXVlJykuY2hlY2tlZCA9IGZhbHNlOwogIGFwcGx5KCk7CiAgcmVuZGVyRHVwKCk7Cn0KZnVuY3Rpb24gY3N2Q2VsbCh2KXsgdmFyIHEgPSBTdHJpbmcuZnJvbUNoYXJDb2RlKDM0KTsgcmV0dXJuIHEgKyBTdHJpbmcodiA9PSBudWxsID8gJycgOiB2KS5yZXBsYWNlKC8iL2csIHEgKyBxKSArIHE7IH0KZnVuY3Rpb24gdG9Dc3Yocm93cyl7CiAgdmFyIGggPSBbJ25hbWUnLCdwcm90b2NvbCcsJ2NvdW50cnknLCdjb3VudHJ5Q29kZScsJ2NvdW50cnlTb3VyY2UnLCdzZXJ2ZXInLCdwb3J0JywnbmV0d29yaycsJ3RscycsJ2ZpbmdlcnByaW50J107CiAgcmV0dXJuIFtoLmpvaW4oJywnKV0uY29uY2F0KHJvd3MubWFwKGZ1bmN0aW9uKG4peyByZXR1cm4gaC5tYXAoZnVuY3Rpb24oayl7IHJldHVybiBjc3ZDZWxsKG5ba10pOyB9KS5qb2luKCcsJyk7IH0pKS5qb2luKCdcbicpOwp9CmZ1bmN0aW9uIGRvd25sb2FkKG5hbWUsIHRleHQsIHR5cGUpewogIHZhciBhID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgnYScpOwogIHZhciBibG9iID0gbmV3IEJsb2IoW3RleHRdLCB7dHlwZTogdHlwZSB8fCAndGV4dC9wbGFpbid9KTsKICBhLmhyZWYgPSBVUkwuY3JlYXRlT2JqZWN0VVJMKGJsb2IpOwogIGEuZG93bmxvYWQgPSBuYW1lOwogIGRvY3VtZW50LmJvZHkuYXBwZW5kQ2hpbGQoYSk7CiAgYS5jbGljaygpOwogIHNldFRpbWVvdXQoZnVuY3Rpb24oKXsgVVJMLnJldm9rZU9iamVjdFVSTChhLmhyZWYpOyBhLnJlbW92ZSgpOyB9LCA1MDApOwp9CmZ1bmN0aW9uIGV4cG9ydEpzb24oKXsgaWYgKCFsYXN0KSB7IHN0YXR1cygn5pqC5peg5pWw5o2u5Y+v5a+85Ye644CCJyk7IHJldHVybjsgfSBkb3dubG9hZCgnc3Vidml6LWFuYWx5c2lzLmpzb24nLCBKU09OLnN0cmluZ2lmeShsYXN0LCBudWxsLCAyKSwgJ2FwcGxpY2F0aW9uL2pzb24nKTsgfQpmdW5jdGlvbiBleHBvcnRDc3YoKXsgaWYgKCFsYXN0KSB7IHN0YXR1cygn5pqC5peg5pWw5o2u5Y+v5a+85Ye644CCJyk7IHJldHVybjsgfSBkb3dubG9hZCgnc3Vidml6LW5vZGVzLmNzdicsIHRvQ3N2KGZpbHRlcmVkLmxlbmd0aCA/IGZpbHRlcmVkIDogbGFzdC5ub2RlcyksICd0ZXh0L2NzdicpOyB9CmZ1bmN0aW9uIGJpbmQoKXsKICBxcygnYnRuVXJsJykub25jbGljayA9IGxvYWRVcmw7CiAgcXMoJ2J0blRleHQnKS5vbmNsaWNrID0gbG9hZFRleHQ7CiAgcXMoJ2J0blNhbXBsZScpLm9uY2xpY2sgPSBsb2FkU2FtcGxlOwogIHFzKCdzZWFyY2gnKS5vbmlucHV0ID0gYXBwbHk7CiAgcXMoJ3Byb3RvY29sJykub25jaGFuZ2UgPSBhcHBseTsKICBxcygnY291bnRyeScpLm9uY2hhbmdlID0gYXBwbHk7CiAgcXMoJ3VuaXF1ZScpLm9uY2hhbmdlID0gZnVuY3Rpb24oKXsgdW5pcXVlT25seSA9IHRoaXMuY2hlY2tlZDsgYXBwbHkoKTsgfTsKICBxcygnZXhwb3J0SnNvbicpLm9uY2xpY2sgPSBleHBvcnRKc29uOwogIHFzKCdleHBvcnRDc3YnKS5vbmNsaWNrID0gZXhwb3J0Q3N2OwogIHN0YXR1cygn5YeG5aSH5bCx57uq44CC6K6/6Zeu5Z+f5ZCN77yaaHR0cDovL3N1YnZpei5zdG9yZS8g44CC5b2T5YmN6ISa5pys54mI5pysIHYwLjEuMTAnKTsKfQppZiAoZG9jdW1lbnQucmVhZHlTdGF0ZSA9PT0gJ2xvYWRpbmcnKSB7IGRvY3VtZW50LmFkZEV2ZW50TGlzdGVuZXIoJ0RPTUNvbnRlbnRMb2FkZWQnLCBiaW5kKTsgfSBlbHNlIHsgYmluZCgpOyB9"))</script>';
-    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>SubViz Surge</title>' + css + '</head><body><div class="wrap"><div class="hero"><span class="badge">Surge Local UI · v' + VERSION + '</span><h1>订阅节点可视化分析</h1><p class="muted">拉取或粘贴机场/代理订阅，解析节点分布、协议、国家/地区、数量、重复项，并支持筛选与导出。v0.1.10 修复前端点击无反应，并增强国旗 / ISO / 中文国家名识别。</p><div class="row"><input id="url" placeholder="订阅 URL，例如 https://example.com/sub"><button id="btnUrl" type="button" onclick="loadUrl()">拉取分析</button><button id="btnSample" class="secondary" type="button" onclick="loadSample()">演示数据</button></div><textarea id="raw" placeholder="或粘贴订阅原文 / Clash YAML"></textarea><button id="btnText" class="secondary" type="button" style="margin-top:10px;width:100%" onclick="loadText()">分析粘贴内容</button><div id="status" class="status">准备就绪。</div></div><div id="cards" class="grid"></div><div class="charts"><div class="panel"><h2>协议分布</h2><div id="protocolChart" class="muted">暂无数据</div></div><div class="panel"><h2>国家 / 地区分布</h2><div id="countryChart" class="muted">暂无数据</div></div></div><div class="panel"><h2>节点列表</h2><p id="count" class="muted">暂无数据</p><div class="tools"><input id="search" placeholder="搜索节点名 / 服务器 / 地区"><select id="protocol"><option value="">全部协议</option></select><select id="country"><option value="">全部地区</option></select><label class="check"><input id="unique" type="checkbox">仅唯一节点</label><button id="exportCsv" class="secondary" type="button">导出 CSV</button><button id="exportJson" class="secondary" type="button">导出 JSON</button></div><div style="overflow:auto;margin-top:14px;border:1px solid rgba(120,165,230,.18);border-radius:18px"><table><thead><tr><th style="width:52px">#</th><th>节点名</th><th style="width:100px">协议</th><th style="width:150px">国家/地区</th><th>服务器</th><th style="width:80px">端口</th><th>传输/TLS</th></tr></thead><tbody id="tbody"><tr><td colspan="7" class="muted">暂无数据</td></tr></tbody></table></div></div><div class="panel"><h2>去重统计</h2><div id="dups"><p class="muted">暂无重复节点。</p></div></div></div>' + js + '</body></html>';
+  var CLIENT_JS = "var DATA=null;\nfunction $(id){return document.getElementById(id)}\nfunction esc(s){return String(s==null?'':s).replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]||c})}\nfunction st(s){$('status').textContent=s}\nfunction bar(it,max){return '<div class=\"bar\"><div>'+esc(it.key)+'</div><div class=\"track\"><div class=\"fill\" style=\"width:'+(max?Math.round(it.count/max*100):0)+'%\"></div></div><b>'+it.count+'</b></div>'}\nfunction uniq(nodes){var m={},a=[];(nodes||[]).forEach(function(n){if(!m[n.fingerprint]){m[n.fingerprint]=1;a.push(n)}});return a}\nfunction render(d){DATA=d;var s=d.summary||{};var labels=['\\u603b\\u8282\\u70b9','\\u552f\\u4e00\\u8282\\u70b9','\\u91cd\\u590d\\u8282\\u70b9','\\u534f\\u8bae\\u6570','\\u56fd\\u5bb6/\\u5730\\u533a'];var vals=[s.total,s.unique,s.duplicates,s.protocols,s.countries];$('cards').innerHTML=labels.map(function(l,i){return '<div class=\"stat\"><span class=\"muted\">'+l+'</span><b>'+(vals[i]||0)+'</b></div>'}).join('');var p=d.stats.byProtocol||[],c=d.stats.byCountry||[];$('protocols').innerHTML=p.length?p.map(function(x){return bar(x,p[0].count)}).join(''):'\\u6682\\u65e0\\u6570\\u636e';$('countries').innerHTML=c.length?c.slice(0,20).map(function(x){return bar(x,c[0].count)}).join(''):'\\u6682\\u65e0\\u6570\\u636e';fillSelect('pf',p);fillSelect('cf',c);apply()}\nfunction fillSelect(id,arr){var old=$(id).value;$(id).innerHTML='<option value=\"\">'+(id=='pf'?'\\u5168\\u90e8\\u534f\\u8bae':'\\u5168\\u90e8\\u5730\\u533a')+'</option>'+(arr||[]).map(function(x){return '<option value=\"'+esc(x.key)+'\">'+esc(x.key)+' ('+x.count+')</option>'}).join('');$(id).value=old}\nfunction filtered(){if(!DATA)return[];var ns=$('unique').checked?uniq(DATA.nodes):DATA.nodes;var q=$('q').value.toLowerCase(),pf=$('pf').value,cf=$('cf').value;return ns.filter(function(n){return(!pf||n.protocol==pf)&&(!cf||n.country==cf)&&(!q||(n.name+n.server+n.country+n.protocol).toLowerCase().indexOf(q)>=0)})}\nfunction apply(){var a=filtered();$('count').textContent='\\u5f53\\u524d\\u663e\\u793a '+a.length+' / '+((DATA&&DATA.summary&&DATA.summary.total)||0)+' \\u4e2a\\u8282\\u70b9';$('tbody').innerHTML=a.slice(0,300).map(function(n,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(n.name)+'<div class=\"small\">'+esc(n.country)+' &middot; '+esc(n.network||'')+' '+esc(n.tls||'')+'</div></td><td><span class=\"tag\">'+esc(n.protocol)+'</span></td><td>'+esc(n.server)+'</td><td>'+esc(n.port)+'</td></tr>'}).join('')||'<tr><td colspan=\"5\" class=\"muted\">\\u6682\\u65e0\\u6570\\u636e</td></tr>'}\nfunction loadJSON(url,opt){return fetch(url,opt).then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){throw new Error(t.slice(0,200)||e)}})}\nfunction analyzeURL(){var u=$('url').value.trim();if(!u){st('\\u8bf7\\u5148\\u8f93\\u5165\\u35746\\u9605 URL');return}st('\\u6309\\u94ae\\u5df2\\u89e6\\u53d1\\uff0c\\u6b63\\u5728\\u62c9\\u53d6\\u5206\\u6790\\u2026');loadJSON('/api/analyze?url='+encodeURIComponent(u)+'&t='+Date.now()).then(function(d){if(!d.ok)throw new Error(d.error||'error');render(d);st('\\u5206\\u6790\\u5b8c\\u6210\\uff1a'+d.summary.total+' \\u4e2a\\u8282\\u70b9')}).catch(function(e){st('\\u5931\\u8d25\\uff1a'+e.message)})}\nfunction sample(){st('\\u6b63\\u5728\\u8f7d\\u5165\\u6f14\\u793a\\u6570\\u636e\\u2026');loadJSON('/api/sample?t='+Date.now()).then(render).then(function(){st('\\u6f14\\u793a\\u6570\\u636e\\u5df2\\u52a0\\u8f7d')}).catch(function(e){st('\\u5931\\u8d25\\uff1a'+e.message)})}\nfunction analyzeText(){var t=$('raw').value;if(!t.trim()){st('\\u8bf7\\u5148\\u7c98\\u8d34\\u35746\\u9605\\u5185\\u5bb9');return}st('\\u6b63\\u5728\\u5206\\u6790\\u7c98\\u8d34\\u5185\\u5bb9\\u2026');loadJSON('/api/analyze-text?t='+Date.now(),{method:'POST',body:t,headers:{'Content-Type':'text/plain;charset=utf-8'}}).then(function(d){if(!d.ok)throw new Error(d.error||'error');render(d);st('\\u5206\\u6790\\u5b8c\\u6210\\uff1a'+d.summary.total+' \\u4e2a\\u8282\\u70b9')}).catch(function(e){st('\\u5931\\u8d25\\uff1a'+e.message)})}\nfunction dl(name,txt,type){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:type||'text/plain;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000)}\nfunction csv(){var a=filtered();var rows=[['name','protocol','country','server','port','network','tls']].concat(a.map(function(n){return[n.name,n.protocol,n.country,n.server,n.port,n.network,n.tls]}));dl('subviz.csv','\\ufeff'+rows.map(function(r){return r.map(function(x){return '\"'+String(x||'').replace(/\"/g,'\"\"')+'\"'}).join(',')}).join('\\n'),'text/csv;charset=utf-8')}\nfunction jsn(){dl('subviz-analysis.json',JSON.stringify(DATA||{},null,2),'application/json;charset=utf-8')}\nwindow.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].forEach(function(id){$(id).addEventListener('input',apply);$(id).addEventListener('change',apply)});$('pull').onclick=analyzeURL;$('demo').onclick=sample;$('textBtn').onclick=analyzeText;$('csv').onclick=csv;$('json').onclick=jsn;});\n";
+
+  function html() {
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>SubViz</title>'+
+    '<style>*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#123257,#061225 55%,#030914);color:#eaf2ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:980px;margin:auto;padding:22px 18px 60px}.hero,.card{background:rgba(12,30,58,.78);border:1px solid #23446f;border-radius:24px;padding:22px;margin:18px 0;box-shadow:0 18px 60px rgba(0,0,0,.22)}h1{font-size:30px;margin:0 0 10px}h2{font-size:22px;margin:0 0 16px}.muted{color:#9fb0cc}.row{display:flex;gap:12px;flex-wrap:wrap}input,textarea,select{width:100%;background:#061225;color:#eaf2ff;border:1px solid #2b4e80;border-radius:18px;padding:15px;font-size:16px}textarea{height:120px}button{width:100%;border:0;border-radius:20px;padding:16px;font-size:18px;font-weight:800;color:white;background:linear-gradient(90deg,#2d8cff,#16c6f4);margin-top:12px}.btn2{background:#22334f}.status{margin-top:14px;padding:12px;border:1px solid #284773;border-radius:18px;overflow:auto}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.stat{background:#17263d;border:1px solid #284773;border-radius:20px;padding:18px}.stat b{display:block;font-size:34px;margin-top:6px}.bar{display:grid;grid-template-columns:120px 1fr 54px;align-items:center;gap:10px;margin:10px 0}.track{height:14px;background:#1f314e;border-radius:20px}.fill{height:14px;background:linear-gradient(90deg,#2d8cff,#16d6e9);border-radius:20px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border-top:1px solid #263f66;padding:12px 8px;text-align:left;word-break:break-all}th{color:#c7d7f5}.tag{display:inline-block;border:1px solid #38658f;background:#183957;border-radius:999px;padding:5px 10px;font-weight:800}.filters{display:grid;grid-template-columns:1fr 1fr;gap:10px}.small{font-size:13px;color:#9fb0cc}@media(max-width:640px){.grid{grid-template-columns:1fr 1fr}.bar{grid-template-columns:90px 1fr 44px}th:nth-child(4),td:nth-child(4){display:none}.wrap{padding:16px 12px 40px}}</style></head><body><div class="wrap">'+
+    '<div class="hero"><div class="small">Surge Local UI &middot; v'+VERSION+'</div><h1>&#35746;&#38405;&#33410;&#28857;&#21487;&#35270;&#21270;&#20998;&#26512;</h1><p class="muted">&#25289;&#21462;&#25110;&#31896;&#36148;&#26426;&#22330;/&#20195;&#29702;&#35746;&#38405;&#65292;&#35299;&#26512;&#33410;&#28857;&#20998;&#24067;&#12289;&#21327;&#35758;&#12289;&#22269;&#23478;/&#22320;&#21306;&#12289;&#25968;&#37327;&#12289;&#37325;&#22797;&#39033;&#65292;&#24182;&#25903;&#25345;&#31579;&#36873;&#19982;&#23548;&#20986;&#12290;</p><input id="url" placeholder="https://example.com/sub"><button type="button" id="pull">&#25289;&#21462;&#20998;&#26512;</button><button type="button" id="demo" class="btn2">&#28436;&#31034;&#25968;&#25454;</button><textarea id="raw" placeholder="&#25110;&#31896;&#36148;&#35746;&#38405;&#21407;&#25991; / Clash YAML"></textarea><button type="button" id="textBtn" class="btn2">&#20998;&#26512;&#31896;&#36148;&#20869;&#23481;</button><div id="status" class="status">&#20934;&#22791;&#23601;&#32490;&#12290;</div></div>'+
+    '<div class="grid" id="cards"></div><div class="card"><h2>&#21327;&#35758;&#20998;&#24067;</h2><div id="protocols" class="muted">&#26242;&#26080;&#25968;&#25454;</div></div><div class="card"><h2>&#22269;&#23478; / &#22320;&#21306;&#20998;&#24067;</h2><div id="countries" class="muted">&#26242;&#26080;&#25968;&#25454;</div></div><div class="card"><h2>&#33410;&#28857;&#21015;&#34920;</h2><p id="count" class="muted">&#26242;&#26080;&#25968;&#25454;</p><input id="q" placeholder="&#25628;&#32034;&#33410;&#28857;&#21517; / &#26381;&#21153;&#22120; / &#22320;&#21306;"><div class="filters"><select id="pf"><option value="">&#20840;&#37096;&#21327;&#35758;</option></select><select id="cf"><option value="">&#20840;&#37096;&#22320;&#21306;</option></select></div><label style="display:flex;gap:8px;align-items:center;margin:12px 0"><input type="checkbox" id="unique" checked style="width:24px;height:24px"> &#20165;&#21807;&#19968;&#33410;&#28857;</label><button type="button" id="csv" class="btn2">&#23548;&#20986; CSV</button><button type="button" id="json" class="btn2">&#23548;&#20986; JSON</button><table><thead><tr><th style="width:48px">#</th><th>&#33410;&#28857;&#21517;</th><th style="width:110px">&#21327;&#35758;</th><th>&#26381;&#21153;&#22120;</th><th style="width:80px">&#31471;&#21475;</th></tr></thead><tbody id="tbody"><tr><td colspan="5" class="muted">&#26242;&#26080;&#25968;&#25454;</td></tr></tbody></table></div></div><script src="/app.js?v='+VERSION+'"></script></body></html>';
   }
 
-  function handle() {
-    var req = typeof $request !== 'undefined' ? $request : { url: '' };
-    var method = String(req.method || 'GET').toUpperCase();
-    if (method === 'OPTIONS') { respond(204, ''); return; }
-    var url = req.url || '', path = getPath(url), q = parseQuery(url);
-    if (path === '/api/health') { respondJSON({ ok: true, name: 'SubViz Surge', version: VERSION, marker: MARKER }); return; }
-    if (path === '/api/sample') { handleSample(); return; }
-    if (path === '/api/analyze') { handleAnalyzeByUrl(q.url || q.u || ''); return; }
-    if (path === '/api/analyze-text') { handleAnalyzeText(req.body || ''); return; }
-    if (path === '/' || path === '' || path === '/index.html') { respond(200, htmlPage(), { 'Content-Type': 'text/html; charset=utf-8' }); return; }
-    respondJSON({ ok: false, error: 'Not Found', path: path, version: VERSION }, 404);
+  function main() {
+    var url = getURL(), path = getPath(url);
+    if (($request.method || '').toUpperCase() === 'OPTIONS') return respond(204, '');
+    if (path === '/app.js') return respond(200, CLIENT_JS, { 'Content-Type': 'application/javascript; charset=utf-8' });
+    if (path === '/api/health') return respondJSON({ ok: true, name: 'SubViz Surge', version: VERSION, marker: MARKER });
+    if (path === '/api/sample') { var r = parseSubscription(sampleText()); r.ok = true; return respondJSON(r); }
+    if (path === '/api/analyze') return fetchURL(getQuery(url, 'url'));
+    if (path === '/api/analyze-text') { try { var rt = parseSubscription(($request && $request.body) || ''); rt.ok = true; return respondJSON(rt); } catch (e) { return respondJSON({ ok:false, error:String(e) }, 500); } }
+    return respond(200, html(), { 'Content-Type': 'text/html; charset=utf-8' });
   }
-
-  try { handle(); } catch (e) { respondJSON({ ok: false, error: String(e && e.stack || e), version: VERSION }, 500); }
-  return { version: VERSION };
+  return { main: main };
 })();
+SubViz.main();

@@ -1,6 +1,6 @@
-#!name=SubViz Surge v0.1.10
-#!desc=机场/代理订阅节点可视化分析工具：本地浏览器 UI，支持节点分布、协议、国家/地区、节点名、数量、筛选、导出、去重统计。v0.1.10 修复前端点击无反应，并增强国家/地区识别：支持更多国旗、ISO代码、中文国家名、extra.country 字段与 CDN/中转标记。
-#!category=订阅管理
+#!name=SubViz Surge v0.1.11
+#!desc=Subscription node visual analyzer local UI for Surge. Fixed mojibake with ASCII-safe HTML/JSON.
+#!category=Subscription
 
 [General]
 force-http-engine-hosts = %APPEND% subviz.store:0, subviz.localhost:0
