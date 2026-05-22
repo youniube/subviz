@@ -1,8 +1,8 @@
-var SUBVIZ_SURGE_0_1_26 = true;
+var SUBVIZ_SURGE_0_1_27 = true;
 var SubViz = (function () {
   'use strict';
-  var VERSION = '0.1.26';
-  var MARKER = 'SUBVIZ_SURGE_0_1_26';
+  var VERSION = '0.1.27';
+  var MARKER = 'SUBVIZ_SURGE_0_1_27';
 
   function safeStringify(obj, space) {
     return JSON.stringify(obj, null, space || 0).replace(/[\u007f-\uffff]/g, function (c) {
@@ -151,22 +151,77 @@ var SubViz = (function () {
     return { countryCode: 'UN', country: '\u672a\u77e5', countrySource: 'none', countryConfidence: 0 };
   }
 
-  function buildNode(obj, format, raw) {
+  function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
+  function pickObj(o, keys) {
+    o = o || {};
+    for (var i = 0; i < keys.length; i++) {
+      var v = o[keys[i]];
+      if (v !== null && v !== undefined && String(v) !== '') return v;
+    }
+    return '';
+  }
+  function normalizeProxyObject(obj) {
     obj = obj || {};
+    var o = {};
+    Object.keys(obj).forEach(function (k) { o[k] = obj[k]; });
+    var ws = obj['ws-opts'] || obj.wsOpts || obj.ws || obj.ws_opts;
+    if (isObj(ws)) {
+      if (!o.path && ws.path) o.path = ws.path;
+      if (!o.host && ws.host) o.host = ws.host;
+      if (!o.Host && ws.Host) o.Host = ws.Host;
+      if (isObj(ws.headers)) {
+        if (!o.Host && ws.headers.Host) o.Host = ws.headers.Host;
+        if (!o.host && ws.headers.host) o.host = ws.headers.host;
+        if (!o['User-Agent'] && ws.headers['User-Agent']) o['User-Agent'] = ws.headers['User-Agent'];
+      }
+    }
+    var h = obj.headers;
+    if (isObj(h)) {
+      if (!o.Host && h.Host) o.Host = h.Host;
+      if (!o.host && h.host) o.host = h.host;
+      if (!o['User-Agent'] && h['User-Agent']) o['User-Agent'] = h['User-Agent'];
+    }
+    var plugin = obj['plugin-opts'] || obj.pluginOpts || obj.plugin_opts;
+    if (isObj(plugin)) {
+      if (!o.mode && plugin.mode) o.mode = plugin.mode;
+      if (!o.host && plugin.host) o.host = plugin.host;
+      if (!o.Host && plugin.Host) o.Host = plugin.Host;
+      if (!o.path && plugin.path) o.path = plugin.path;
+      if (!o.tls && plugin.tls) o.tls = plugin.tls;
+    }
+    o.type = clean(o.type || o.protocol || '');
+    o.server = clean(o.server || o.add || o.address || o.hostname || '');
+    o.port = clean(o.port || '');
+    o.name = clean(o.name || o.ps || o.remarks || o.remark || o.tag || '');
+    o.network = clean(o.network || o.net || o.transport || '');
+    if (String(o.network).toLowerCase() === 'websocket') o.network = 'ws';
+    o.tls = clean(o.tls || o.security || '');
+    o.cipher = clean(o.cipher || o.method || o['encrypt-method'] || o.encrypt_method || o.scy || '');
+    o.password = clean(o.password || o.pass || o.passwd || o.psk || '');
+    o.uuid = clean(o.uuid || o.id || o.username || '');
+    o.sni = clean(o.sni || o.servername || o.serverName || o['server-name'] || o.server_name || '');
+    o.Host = clean(o.Host || o.host || o['ws-host'] || '');
+    o.path = clean(o.path || o['ws-path'] || '');
+    return o;
+  }
+
+  function buildNode(obj, format, raw) {
+    obj = normalizeProxyObject(obj || {});
     var name = clean(obj.name || obj.ps || obj.remarks || obj.remark || obj.tag || '');
     var protocol = clean((obj.type || obj.protocol || '')).toLowerCase();
     if (protocol === 'socks') protocol = 'socks5';
+    if (protocol === 'hy2') protocol = 'hysteria2';
     var server = clean(obj.server || obj.add || obj.host || obj.address || obj.hostname || '');
     var port = clean(obj.port || '');
     var network = clean(obj.network || obj.net || obj.transport || '');
-    var tls = clean(obj.tls || obj.security || obj['skip-cert-verify'] || '');
+    var tls = clean(obj.tls || obj.security || '');
     if (!protocol && raw) {
       var m = String(raw).match(/^([a-z0-9+.-]+):\/\//i);
       if (m) protocol = m[1].toLowerCase();
     }
     var c = detectCountry(name, server, obj);
     return {
-      id: clean(obj.uuid || obj.id || obj.password || ''), name: name || server || 'node', protocol: protocol || 'unknown',
+      id: clean(obj.uuid || obj.id || obj.username || obj.password || ''), name: name || server || 'node', protocol: protocol || 'unknown',
       server: server, port: port, network: network, tls: tls, countryCode: c.countryCode, country: c.country,
       countrySource: c.countrySource, countryConfidence: c.countryConfidence,
       sourceFormat: format || 'unknown', raw: raw || safeStringify(obj, 0), extra: obj,
@@ -202,7 +257,7 @@ var SubViz = (function () {
   var REAL_PROXY_TYPES = { ss:1, ssr:1, vmess:1, vless:1, trojan:1, hysteria:1, hysteria2:1, hy2:1, tuic:1, snell:1, socks:1, socks5:1, http:1, https:1, anytls:1 };
   var GROUP_TYPES = { select:1, 'url-test':1, fallback:1, 'load-balance':1, relay:1, smart:1, direct:1, reject:1, pass:1 };
   function isRealProxyObject(obj) {
-    obj = obj || {};
+    obj = normalizeProxyObject(obj || {});
     var t = clean(obj.type || obj.protocol || '').toLowerCase();
     if (t === 'socks') t = 'socks5';
     if (!t || GROUP_TYPES[t] || !REAL_PROXY_TYPES[t]) return false;
@@ -212,12 +267,19 @@ var SubViz = (function () {
     return true;
   }
   function parseClash(text) {
-    var nodes = [], lines = String(text || '').split(/\r?\n/), cur = null, inProxies = false;
+    var nodes = [], lines = String(text || '').split(/\r?\n/), cur = null, inProxies = false, stack = [];
     var hasProxiesSection = /^\s*proxies\s*:\s*$/im.test(text);
     if (!hasProxiesSection && /^\s*-\s*(?:name\s*:|\{)/m.test(text)) inProxies = true;
     function push() {
       if (cur && isRealProxyObject(cur)) nodes.push(setFingerprint(buildNode(cur, 'clash-yaml', safeStringify(cur, 0))));
-      cur = null;
+      cur = null; stack = [];
+    }
+    function setAt(indent, key, val, makeObj) {
+      while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+      var parent = stack.length ? stack[stack.length - 1].obj : cur;
+      if (!parent) return;
+      if (makeObj) { var child = {}; parent[key] = child; stack.push({ indent: indent, obj: child }); }
+      else parent[key] = clean(val);
     }
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
@@ -231,13 +293,13 @@ var SubViz = (function () {
         if (isRealProxyObject(fo)) nodes.push(setFingerprint(buildNode(fo, 'clash-yaml', mFlow[1])));
         continue;
       }
-      var mName = line.match(/^\s*-\s*name\s*:\s*(.*)$/i);
-      if (mName) { push(); cur = { name: clean(mName[1]) }; continue; }
+      var mName = line.match(/^(\s*)-\s*name\s*:\s*(.*)$/i);
+      if (mName) { push(); cur = { name: clean(mName[2]) }; stack = [{ indent: mName[1].length, obj: cur }]; continue; }
+      var mStart = line.match(/^(\s*)-\s*([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+      if (mStart) { push(); cur = {}; stack = [{ indent: mStart[1].length, obj: cur }]; setAt(mStart[1].length + 2, mStart[2], mStart[3], clean(mStart[3]) === ''); continue; }
       if (!cur) continue;
-      var m = line.match(/^\s+([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
-      if (m) cur[m[1]] = clean(m[2]);
-      var m2 = line.match(/^\s+(Host|host|Path|path|servername|sni)\s*:\s*(.*)$/);
-      if (m2) cur[m2[1]] = clean(m2[2]);
+      var m = line.match(/^(\s+)([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+      if (m) setAt(m[1].length, m[2], m[3], clean(m[3]) === '');
     }
     push(); return nodes;
   }
@@ -433,11 +495,15 @@ var SubViz = (function () {
     v = String(v || '').toLowerCase();
     return v === 'true' || v === '1' || v === 'yes' || v === 'on' || v === 'tls' || v === 'reality';
   }
+  function policyEscape(val) {
+    val = String(val);
+    return val.replace(/[,#\r\n]/g, function (ch) { return encodeURIComponent(ch); }).replace(/ /g, '%20');
+  }
   function addParam(arr, key, val) {
     if (val === null || val === undefined || val === '') return;
     val = String(val);
     if (/[\r\n]/.test(val)) return;
-    arr.push(key + '=' + val.replace(/,/g, '%2C'));
+    arr.push(key + '=' + policyEscape(val));
   }
   function addBoolParam(arr, key, val) {
     if (val === null || val === undefined || val === '') return;
@@ -453,11 +519,11 @@ var SubViz = (function () {
   }
   function nodePolicyDescriptor(node) {
     node = node || {};
-    var e = node.extra || {};
+    var e = normalizeProxyObject(node.extra || {});
     var type = clean(node.protocol || e.type || '').toLowerCase();
     if (type === 'socks') type = 'socks5';
     if (type === 'hy2') type = 'hysteria2';
-    var server = clean(node.server || e.server || e.add || e.host || e.address || '');
+    var server = clean(node.server || e.server || e.add || e.address || e.host || '');
     var port = clean(node.port || e.port || '');
     if (!type || !server || !port) return { ok:false, error:'missing protocol/server/port' };
     var params = [], desc = '';
@@ -500,7 +566,10 @@ var SubViz = (function () {
       if (!uuid) return { ok:false, error:'vmess missing uuid' };
       desc = ['vmess', server, port].join(', ');
       addParam(params, 'username', uuid);
-      addParam(params, 'encrypt-method', firstOf(e, ['cipher','security']) || 'auto');
+      var vmCipher = firstOf(e, ['cipher','security','scy']);
+      if (vmCipher && String(vmCipher).toLowerCase() !== 'auto') addParam(params, 'encrypt-method', vmCipher);
+      var aid = firstOf(e, ['alterId','alterid','aid']);
+      if (aid && aid !== '0') addParam(params, 'alter-id', aid);
       if (surgeTLS(firstOf(e, ['tls','security']))) addParam(params, 'tls', 'true');
       if (sni) addParam(params, 'sni', sni);
       if (skip) addBoolParam(params, 'skip-cert-verify', skip);
