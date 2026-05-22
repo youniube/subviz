@@ -215,38 +215,6 @@ vmess://...
 
 ---
 
-## 重要说明
-
-### 节点名清理不会修改连接参数
-
-SubViz 只清理节点名 `name`。
-
-不会修改这些字段：
-
-```text
-server
-port
-password
-uuid
-path
-Host
-SNI
-servername
-plugin-opts
-grpc-service-name
-```
-
-有些节点会把推广词写进 `path`，例如：
-
-```yaml
-path: "/trTelegram🇨🇳 @WangCai2"
-```
-
-虽然看起来像垃圾词，但它可能是连接路径的一部分。
-
-不要随便删除，否则节点可能失效。
-
----
 
 ## 推荐流程
 
