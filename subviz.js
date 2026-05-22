@@ -1,12 +1,12 @@
 /*
  * SubViz Surge - Subscription Node Visualizer
- * Runs inside Surge http-request script and serves a local web UI at https://subviz.store/
+ * Runs inside Surge http-request script and serves a local web UI at http://subviz.store/
  * No external dependency. No remote storage. Subscription text is parsed in Surge runtime and returned to the local UI.
  */
 var SubViz = (function () {
   'use strict';
 
-  var VERSION = '0.1.1';
+  var VERSION = '0.1.2';
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (_) { return ''; }
@@ -577,7 +577,7 @@ var SubViz = (function () {
     return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
       '<title>SubViz Surge</title><style>' + css() + '</style></head><body><main class="app">' +
       '<section class="hero"><div><p class="eyebrow">Surge Local UI · SubViz</p><h1>订阅节点可视化分析</h1><p class="sub">拉取或粘贴机场/代理订阅，解析节点分布、协议、国家/地区、数量、重复项，并支持筛选与导出。</p></div><div class="badge">v' + VERSION + '</div></section>' +
-      '<section class="panel input-panel"><label>订阅 URL</label><div class="row"><input id="url" placeholder="https://example.com/sub?token=..." autocomplete="off"><button id="analyze">拉取分析</button><button id="sample" class="ghost">演示数据</button></div><details><summary>或粘贴订阅原文 / Clash YAML</summary><textarea id="raw" placeholder="支持 vmess/vless/trojan/ss/ssr/hysteria2/tuic/snell URI，也支持 Clash proxies: YAML"></textarea><button id="analyzeText" class="secondary">分析粘贴内容</button></details><div id="status" class="status">准备就绪。访问域名：<code>https://subviz.store/</code></div></section>' +
+      '<section class="panel input-panel"><label>订阅 URL</label><div class="row"><input id="url" placeholder="https://example.com/sub?token=..." autocomplete="off"><button id="analyze">拉取分析</button><button id="sample" class="ghost">演示数据</button></div><details><summary>或粘贴订阅原文 / Clash YAML</summary><textarea id="raw" placeholder="支持 vmess/vless/trojan/ss/ssr/hysteria2/tuic/snell URI，也支持 Clash proxies: YAML"></textarea><button id="analyzeText" class="secondary">分析粘贴内容</button></details><div id="status" class="status">准备就绪。访问域名：<code>http://subviz.store/</code></div></section>' +
       '<section id="summary" class="grid cards"></section>' +
       '<section class="grid two"><div class="panel"><div class="panel-title">协议分布</div><div id="protocolChart" class="chart"></div></div><div class="panel"><div class="panel-title">国家 / 地区分布</div><div id="countryChart" class="chart"></div></div></section>' +
       '<section class="panel"><div class="toolbar"><div><div class="panel-title">节点列表</div><p id="tableHint" class="hint">暂无数据</p></div><div class="filters"><input id="kw" placeholder="搜索节点名 / 域名"><select id="protocolFilter"><option value="">全部协议</option></select><select id="countryFilter"><option value="">全部地区</option></select><label class="check"><input id="uniqueOnly" type="checkbox">仅唯一节点</label><button id="exportCsv" class="ghost">导出 CSV</button><button id="exportJson" class="ghost">导出 JSON</button></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>节点名</th><th>协议</th><th>国家/地区</th><th>服务器</th><th>端口</th><th>传输/TLS</th><th>重复指纹</th></tr></thead><tbody id="tbody"></tbody></table></div></section>' +

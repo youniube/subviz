@@ -3,8 +3,19 @@
 #!category=订阅管理
 #!arguments=SCRIPT_URL=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js
 
+[General]
+force-http-engine-hosts = %APPEND% subviz.store:0, subviz.local:0
+
 [MITM]
 hostname = %APPEND% subviz.store, subviz.local
 
+[Host]
+subviz.store = 198.18.0.1
+subviz.local = 198.18.0.1
+
+[Rule]
+DOMAIN,subviz.store,DIRECT
+DOMAIN,subviz.local,DIRECT
+
 [Script]
-SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.local)\/,requires-body=true,max-size=10485760,script-path=%SCRIPT_URL%,script-update-interval=60,timeout=60,debug=true
+SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.local)(?:\/|$),requires-body=true,max-size=10485760,script-path=%SCRIPT_URL%,script-update-interval=60,timeout=60,debug=true
