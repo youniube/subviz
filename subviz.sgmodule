@@ -1,0 +1,10 @@
+#!name=SubViz Surge
+#!desc=机场/代理订阅节点可视化分析工具：本地浏览器 UI，支持节点分布、协议、国家/地区、节点名、数量、筛选、导出、去重统计。
+#!category=订阅管理
+#!arguments=SCRIPT_URL=https://raw.githubusercontent.com/YOUR_NAME/subviz-surge/main/subviz.js
+
+[MITM]
+hostname = %APPEND% subviz.local
+
+[Script]
+SubViz = type=http-request,pattern=^https?:\/\/subviz\.local\/,requires-body=true,max-size=10485760,script-path=%SCRIPT_URL%,script-update-interval=3600,timeout=60,debug=false
