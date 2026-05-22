@@ -1,15 +1,15 @@
-# SubViz Surge v0.1.7
+# SubViz Surge v0.1.8
 
-修复点：移除 `#!arguments` 和 `%SCRIPT_URL%` 占位符，`script-path` 改为硬编码 GitHub Raw 地址，避免 Surge 外部资源显示 `%SCRIPT_URL% / 资源不存在`。
+修复点：
 
-上传仓库根目录：
+- 去掉模块参数占位符，script-path 写死为你的 GitHub Raw 地址。
+- 前端按钮增加 type=button + inline onclick 兜底。
+- 前端请求改成 fetch / XMLHttpRequest 双通道，点击后状态栏会立即显示“按钮已触发”。
+- 建议先点“演示数据”，确认 UI 事件正常，再拉取订阅 URL。
+
+覆盖上传：
+
 - subviz.sgmodule
 - subviz.js
 
-安装模块地址：
-https://raw.githubusercontent.com/youniube/subviz/refs/heads/main/subviz.sgmodule
-
-测试：
-http://subviz.store/api/health
-
-正常返回版本：0.1.7。
+Raw 校验：subviz.js 第一行必须是 `var SUBVIZ_SURGE_0_1_8 = true;`。
