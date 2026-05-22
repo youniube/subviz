@@ -1,6 +1,5 @@
-#!name=SubViz Surge v0.1.289
-#!name=SubViz Surge v0.1.28
-#!desc=Subscription node visual analyzer local UI for Surge. Adds user-selected real landing IP test with multi API fallback, retries, internal GEOIP option, node-name cleanup, Clash/URI export, copy button, GeoIP enrichment. Full build restored from v0.1.24; adds node availability check with latency and current-filter scope.
+#!name=SubViz Surge v0.1.29
+#!desc=Subscription node visual analyzer local UI for Surge. Adds user-selected real landing IP test with multi API fallback, retries, internal GEOIP option, node-name cleanup, Clash/URI export, copy button, GeoIP enrichment. Full build restored from v0.1.24; adds node availability check with latency, current-filter scope, SS URI parser fix, and stronger duplicate fingerprinting.
 #!category=Subscription
 
 [General]
@@ -24,4 +23,4 @@ SubVizLanding = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.l
 
 SubVizAvailability = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/availability(?:\?|$),requires-body=true,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=true,ability=http-client-policy
 
-SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)(?!\/api\/(?:analyze-text|landing)(?:\?|$))(?:\/|$),requires-body=false,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=true
+SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)(?!\/api\/(?:analyze-text|landing|availability)(?:\?|$))(?:\/|$),requires-body=false,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=true

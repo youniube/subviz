@@ -1,8 +1,8 @@
-var SUBVIZ_SURGE_0_1_28 = true;
+var SUBVIZ_SURGE_0_1_29 = true;
 var SubViz = (function () {
   'use strict';
-  var VERSION = '0.1.28';
-  var MARKER = 'SUBVIZ_SURGE_0_1_28';
+  var VERSION = '0.1.29';
+  var MARKER = 'SUBVIZ_SURGE_0_1_29';
 
   function safeStringify(obj, space) {
     return JSON.stringify(obj, null, space || 0).replace(/[\u007f-\uffff]/g, function (c) {
@@ -229,7 +229,13 @@ var SubViz = (function () {
     };
   }
   function setFingerprint(n) {
-    n.fingerprint = [n.protocol, n.server, n.port, n.network, n.tls].join('|').toLowerCase();
+    var e = (n && n.extra) || {};
+    var sni = clean(e.sni || e.servername || e.serverName || e['server-name'] || e.server_name || '');
+    var host = clean(e.Host || e.host || e['ws-host'] || '');
+    var path = clean(e.path || e['ws-path'] || '');
+    var cipher = clean(e.cipher || e.method || e['encrypt-method'] || e.encrypt_method || '');
+    var auth = clean(e.uuid || n.id || e.password || e.passwd || e.pass || '');
+    n.fingerprint = [n.protocol, n.server, n.port, n.network, n.tls, sni, host, path, cipher, auth].join('|').toLowerCase();
     return n;
   }
 
@@ -336,12 +342,27 @@ var SubViz = (function () {
       }
       if (proto === 'ss') {
         applyQuery(query);
-        var decoded = rest.indexOf('@') >= 0 ? rest : atobSafe(rest);
-        var at = decoded.lastIndexOf('@');
-        var userinfo = at >= 0 ? decoded.slice(0, at) : '';
-        var hp = at >= 0 ? decoded.slice(at + 1) : decoded;
+        var decoded = rest, at = rest.lastIndexOf('@'), userinfo = '', hp = '';
+        if (at >= 0) {
+          userinfo = decodeURIComponentSafe(rest.slice(0, at));
+          hp = rest.slice(at + 1);
+          // SIP002 commonly writes ss://base64(method:password)@host:port#name.
+          // If the userinfo part itself has no colon, decode that part only.
+          if (userinfo.indexOf(':') < 0) {
+            var du = atobSafe(userinfo);
+            if (du) userinfo = du;
+          }
+        } else {
+          decoded = atobSafe(rest) || rest;
+          at = decoded.lastIndexOf('@');
+          userinfo = at >= 0 ? decoded.slice(0, at) : '';
+          hp = at >= 0 ? decoded.slice(at + 1) : decoded;
+        }
         var cidx = userinfo.indexOf(':');
-        if (cidx >= 0) { obj.cipher = decodeURIComponentSafe(userinfo.slice(0, cidx)); obj.password = decodeURIComponentSafe(userinfo.slice(cidx + 1)); }
+        if (cidx >= 0) {
+          obj.cipher = decodeURIComponentSafe(userinfo.slice(0, cidx));
+          obj.password = decodeURIComponentSafe(userinfo.slice(cidx + 1));
+        }
         obj.server = hp.split(':')[0]; obj.port = hp.split(':')[1] || ''; obj.name = name; obj.type = 'ss';
         return setFingerprint(buildNode(obj, 'uri', line));
       }
