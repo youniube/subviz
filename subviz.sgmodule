@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.11
-#!desc=Subscription node visual analyzer local UI for Surge. Fixed mojibake with ASCII-safe HTML/JSON.
+#!name=SubViz Surge v0.1.12
+#!desc=Subscription node visual analyzer local UI for Surge. Filter Clash proxy-groups/rules; only real proxy nodes are counted.
 #!category=Subscription
 
 [General]

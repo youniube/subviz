@@ -1,8 +1,8 @@
-var SUBVIZ_SURGE_0_1_11 = true;
+var SUBVIZ_SURGE_0_1_12 = true;
 var SubViz = (function () {
   'use strict';
-  var VERSION = '0.1.11';
-  var MARKER = 'SUBVIZ_SURGE_0_1_11';
+  var VERSION = '0.1.12';
+  var MARKER = 'SUBVIZ_SURGE_0_1_12';
 
   function safeStringify(obj, space) {
     return JSON.stringify(obj, null, space || 0).replace(/[\u007f-\uffff]/g, function (c) {
@@ -199,15 +199,38 @@ var SubViz = (function () {
     });
     return obj;
   }
+  var REAL_PROXY_TYPES = { ss:1, ssr:1, vmess:1, vless:1, trojan:1, hysteria:1, hysteria2:1, hy2:1, tuic:1, snell:1, socks:1, socks5:1, http:1, https:1, anytls:1 };
+  var GROUP_TYPES = { select:1, 'url-test':1, fallback:1, 'load-balance':1, relay:1, smart:1, direct:1, reject:1, pass:1 };
+  function isRealProxyObject(obj) {
+    obj = obj || {};
+    var t = clean(obj.type || obj.protocol || '').toLowerCase();
+    if (t === 'socks') t = 'socks5';
+    if (!t || GROUP_TYPES[t] || !REAL_PROXY_TYPES[t]) return false;
+    var server = clean(obj.server || obj.add || obj.host || obj.address || obj.hostname || '');
+    var port = clean(obj.port || '');
+    if (!server || !port) return false;
+    return true;
+  }
   function parseClash(text) {
     var nodes = [], lines = String(text || '').split(/\r?\n/), cur = null, inProxies = false;
-    function push() { if (cur && (cur.type || cur.server || cur.name)) nodes.push(setFingerprint(buildNode(cur, 'clash-yaml', safeStringify(cur, 0)))); cur = null; }
+    var hasProxiesSection = /^\s*proxies\s*:\s*$/im.test(text);
+    if (!hasProxiesSection && /^\s*-\s*(?:name\s*:|\{)/m.test(text)) inProxies = true;
+    function push() {
+      if (cur && isRealProxyObject(cur)) nodes.push(setFingerprint(buildNode(cur, 'clash-yaml', safeStringify(cur, 0))));
+      cur = null;
+    }
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
-      if (/^\s*proxies\s*:\s*$/i.test(line)) { inProxies = true; continue; }
-      if (!inProxies && /^\s*proxy-providers\s*:/i.test(line)) break;
+      if (/^\s*proxies\s*:\s*$/i.test(line)) { push(); inProxies = true; continue; }
+      if (inProxies && /^\S[^:]*\s*:\s*(?:#.*)?$/i.test(line) && !/^proxies\s*:/i.test(line)) { push(); inProxies = false; continue; }
+      if (!inProxies) continue;
       var mFlow = line.match(/^\s*-\s*(\{.*\})\s*$/);
-      if (mFlow) { push(); nodes.push(setFingerprint(buildNode(parseFlowObject(mFlow[1]), 'clash-yaml', mFlow[1]))); continue; }
+      if (mFlow) {
+        push();
+        var fo = parseFlowObject(mFlow[1]);
+        if (isRealProxyObject(fo)) nodes.push(setFingerprint(buildNode(fo, 'clash-yaml', mFlow[1])));
+        continue;
+      }
       var mName = line.match(/^\s*-\s*name\s*:\s*(.*)$/i);
       if (mName) { push(); cur = { name: clean(mName[1]) }; continue; }
       if (!cur) continue;
