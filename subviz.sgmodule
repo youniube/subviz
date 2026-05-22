@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.15
-#!desc=Subscription node visual analyzer local UI for Surge. Render all nodes; add online GeoIP enrichment; export Clash YAML / URI subscriptions; add copy button and smart node name cleanup.
+#!name=SubViz Surge v0.1.17
+#!desc=Subscription node visual analyzer local UI for Surge. Adds customizable node-name cleanup pipeline, raw-name preservation, Clash/URI export, copy button, GeoIP enrichment.
 #!category=Subscription
 
 [General]
