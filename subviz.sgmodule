@@ -1,21 +1,22 @@
-#!name=SubViz Surge
+#!name=SubViz Surge v0.1.6
 #!desc=机场/代理订阅节点可视化分析工具：本地浏览器 UI，支持节点分布、协议、国家/地区、节点名、数量、筛选、导出、去重统计。
 #!category=订阅管理
 #!arguments=SCRIPT_URL=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js
 
 [General]
-force-http-engine-hosts = %APPEND% subviz.store:0, subviz.local:0
+force-http-engine-hosts = %APPEND% subviz.store:0, subviz.localhost:0
 
 [MITM]
-hostname = %APPEND% subviz.store, subviz.local
+hostname = %APPEND% subviz.store, subviz.localhost
 
 [Host]
 subviz.store = 198.18.0.1
-subviz.local = 198.18.0.1
+subviz.localhost = 198.18.0.1
 
 [Rule]
 DOMAIN,subviz.store,DIRECT
-DOMAIN,subviz.local,DIRECT
+DOMAIN,subviz.localhost,DIRECT
 
 [Script]
-SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.local)(?:\/|$),requires-body=true,max-size=10485760,script-path=%SCRIPT_URL%,script-update-interval=60,timeout=60,debug=true
+SubVizText = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/analyze-text(?:\?|$),requires-body=true,max-size=10485760,script-path=%SCRIPT_URL%,script-update-interval=60,timeout=60,debug=true
+SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)(?!\/api\/analyze-text(?:\?|$))(?:\/|$),requires-body=false,max-size=10485760,script-path=%SCRIPT_URL%,script-update-interval=60,timeout=60,debug=true
