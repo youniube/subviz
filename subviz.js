@@ -1,7 +1,7 @@
-var SUBVIZ_SURGE_0_1_6 = true;
+var SUBVIZ_SURGE_0_1_7 = true;
 var SubViz = (function () {
   'use strict';
-  var VERSION = '0.1.6';
+  var VERSION = '0.1.7';
 
   function nowIso() { try { return new Date().toISOString(); } catch (e) { return ''; } }
 
@@ -445,7 +445,7 @@ var SubViz = (function () {
       var method = ($request && $request.method || 'GET').toUpperCase();
       if (method === 'OPTIONS') { respond(204, ''); return; }
       var url = $request.url || '', path = getPath(url);
-      if (path === '/api/health') { respondJSON({ ok: true, name: 'SubViz Surge', version: VERSION, marker: 'SUBVIZ_SURGE_0_1_6', time: nowIso() }); return; }
+      if (path === '/api/health') { respondJSON({ ok: true, name: 'SubViz Surge', version: VERSION, marker: 'SUBVIZ_SURGE_0_1_7', time: nowIso() }); return; }
       if (path === '/api/analyze') { handleAnalyzeByUrl(parseQuery(url).url || ''); return; }
       if (path === '/api/analyze-text') { handleAnalyzeText($request.body || ''); return; }
       if (path === '/api/sample') { handleSample(); return; }
