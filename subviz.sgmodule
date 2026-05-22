@@ -1,4 +1,4 @@
-#!name=SubViz Surge v0.1.30
+#!name=SubViz Surge v0.1.31
 #!desc=Subscription node visual analyzer local UI for Surge. Adds user-selected real landing IP test with multi API fallback, retries, internal GEOIP option, node-name cleanup, Clash/URI export, copy button, GeoIP enrichment. Full build restored from v0.1.24; adds node availability check with latency, current-filter scope, SS URI parser fix, stronger duplicate fingerprinting, VMess AEAD/WS descriptor fallbacks, and 3s default availability timeout.
 #!category=Subscription
 
