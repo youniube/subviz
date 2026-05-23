@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.38
-#!desc=Subscription node visual analyzer local UI for Surge. Based on v0.1.33. UI-only black-gold frontend refactor on the v0.1.33-based tool: cleaner dashboard layout, modern table/card spacing, GitHub raw assets favicon + Apple Touch Icon support, iOS PWA meta, paste/drop auto analyze, server ellipsis title, copy success feedback, and preserved selectable batch actions, landing test, availability check, cleanup, Clash/URI export, and copy-alive-nodes action.
+#!name=SubViz Surge v0.1.39
+#!desc=Subscription node visual analyzer local UI for Surge. Based on v0.1.39. First-round stability patch: cleaner dashboard layout, modern table/card spacing, GitHub raw assets favicon + Apple Touch Icon support, iOS PWA meta, paste/drop auto analyze, server ellipsis title, copy success feedback, and preserved selectable batch actions, landing test, availability check, cleanup, Clash/URI export, and copy-alive-nodes action.
 #!category=Subscription
 
 [General]
@@ -17,10 +17,10 @@ DOMAIN,subviz.store,DIRECT
 DOMAIN,subviz.localhost,DIRECT
 
 [Script]
-SubVizText = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/analyze-text(?:\?|$),requires-body=true,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=true
+SubVizText = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/analyze-text(?:\?|$),requires-body=true,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=false
 
-SubVizLanding = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/landing(?:\?|$),requires-body=true,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=90,debug=true,ability=http-client-policy
+SubVizLanding = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/landing(?:\?|$),requires-body=true,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=90,debug=false,ability=http-client-policy
 
-SubVizAvailability = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/availability(?:\?|$),requires-body=true,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=true,ability=http-client-policy
+SubVizAvailability = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)\/api\/availability(?:\?|$),requires-body=true,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=false,ability=http-client-policy
 
-SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)(?!\/api\/(?:analyze-text|landing|availability)(?:\?|$))(?:\/|$),requires-body=false,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=true
+SubViz = type=http-request,pattern=^https?:\/\/(?:subviz\.store|subviz\.localhost)(?!\/api\/(?:analyze-text|landing|availability)(?:\?|$))(?:\/|$),requires-body=false,max-size=10485760,script-path=https://raw.githubusercontent.com/youniube/subviz/main/subviz.js,script-update-interval=60,timeout=60,debug=false

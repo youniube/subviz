@@ -44,7 +44,7 @@ http://subviz.store/
 如果页面没有刷新到最新版，可以加版本参数：
 
 ```text
-http://subviz.store/?v=124
+http://subviz.store/?v=139
 ```
 
 健康检查：
@@ -59,7 +59,7 @@ http://subviz.store/api/health
 {
   "ok": true,
   "name": "SubViz Surge",
-  "version": "0.1.24"
+  "version": "0.1.39"
 }
 ```
 
@@ -260,7 +260,7 @@ http://subviz.store/api/health
 尝试：
 
 ```text
-http://subviz.store/?v=124
+http://subviz.store/?v=139
 ```
 
 或在 Surge 外部资源里更新脚本。
@@ -295,6 +295,15 @@ CDN、中转、伪装域名场景下，落地检测更接近真实情况。
 ## 当前版本
 
 ```text
-v0.1.24
+v0.1.39
 ```
+
+## v0.1.39 修复内容
+
+- Clash YAML 导出改为递归 YAML 输出，保留 `ws-opts` / `grpc-opts` / `reality-opts` 等嵌套对象。
+- 补全 VLESS Reality 的 `reality-opts.public-key` / `short-id` 兼容，提升测活和落地检测的临时策略生成成功率。
+- 增强 URI 解析中的 IPv6 host:port 拆分。
+- 模块默认关闭 `debug`，减少日志中暴露订阅敏感信息的风险。
+- 远程订阅拉取保持不限制，仍按原逻辑直接拉取用户输入 URL。
+
 
