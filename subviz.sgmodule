@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.37
-#!desc=Subscription node visual analyzer local UI for Surge. Based on v0.1.33. UI-only black-gold frontend refactor on the v0.1.33-based tool: cleaner dashboard layout, modern table/card spacing, favicon + Apple Touch Icon support, iOS PWA meta, paste/drop auto analyze, server ellipsis title, copy success feedback, and preserved selectable batch actions, landing test, availability check, cleanup, Clash/URI export, and copy-alive-nodes action.
+#!name=SubViz Surge v0.1.38
+#!desc=Subscription node visual analyzer local UI for Surge. Based on v0.1.33. UI-only black-gold frontend refactor on the v0.1.33-based tool: cleaner dashboard layout, modern table/card spacing, GitHub raw assets favicon + Apple Touch Icon support, iOS PWA meta, paste/drop auto analyze, server ellipsis title, copy success feedback, and preserved selectable batch actions, landing test, availability check, cleanup, Clash/URI export, and copy-alive-nodes action.
 #!category=Subscription
 
 [General]
