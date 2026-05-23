@@ -44,7 +44,7 @@ http://subviz.store/
 如果页面没有刷新到最新版，可以加版本参数：
 
 ```text
-http://subviz.store/?v=140
+http://subviz.store/?v=141
 ```
 
 健康检查：
@@ -59,7 +59,7 @@ http://subviz.store/api/health
 {
   "ok": true,
   "name": "SubViz Surge",
-  "version": "0.1.40"
+  "version": "0.1.41"
 }
 ```
 
@@ -260,7 +260,7 @@ http://subviz.store/api/health
 尝试：
 
 ```text
-http://subviz.store/?v=140
+http://subviz.store/?v=141
 ```
 
 或在 Surge 外部资源里更新脚本。
@@ -295,8 +295,17 @@ CDN、中转、伪装域名场景下，落地检测更接近真实情况。
 ## 当前版本
 
 ```text
-v0.1.40
+v0.1.41
 ```
+
+## v0.1.41 修复内容
+
+- 第三轮结构化重构：新增 `src/` 源码目录，把原来集中在 `subviz.js` 里的后端、解析器、Surge 策略、落地/测活、HTML 路由和前端 UI 拆分为可维护文件。
+- 保留 Surge 最终使用方式不变：`subviz.js` 仍然是可直接部署/覆盖的单文件脚本。
+- 新增 `tools/build-subviz.js`，可以从 `src/` 一键重新生成 `subviz.js`。
+- 新增 `package.json` 脚本：`npm run build`、`npm run check`、`npm test`。
+- 新增 `tools/smoke-test.js`，覆盖 health、sample、analyze-text、前端脚本语法、Reality 字段展平和 gRPC flow-style 解析等基础回归。
+- 没有改变远程订阅拉取限制策略，仍保持不限制 URL。
 
 ## v0.1.40 修复内容
 

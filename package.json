@@ -1,0 +1,14 @@
+{
+  "name": "subviz-surge",
+  "version": "0.1.41",
+  "private": true,
+  "description": "Local subscription visual analyzer UI for Surge.",
+  "scripts": {
+    "build": "node tools/build-subviz.js",
+    "check": "node tools/build-subviz.js && node --check subviz.js && node --check src/client/app.js && node --check tools/build-subviz.js",
+    "test": "node tools/build-subviz.js && node tools/smoke-test.js"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

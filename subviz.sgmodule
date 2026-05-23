@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.40
-#!desc=Subscription node visual analyzer local UI for Surge. v0.1.40 second-round compatibility patch: broader URI export for Hysteria2/TUIC/Snell/SOCKS/HTTP/AnyTLS, flow-style Clash parsing, cleaner YAML export, and clearer remote subscription errors.
+#!name=SubViz Surge v0.1.41
+#!desc=Subscription node visual analyzer local UI for Surge. v0.1.41 third-round structure patch: split maintainable source modules, add one-command bundle build, and keep the generated Surge single-file script.
 #!category=Subscription
 
 [General]
