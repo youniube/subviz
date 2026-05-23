@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.39
-#!desc=Subscription node visual analyzer local UI for Surge. Based on v0.1.39. First-round stability patch: cleaner dashboard layout, modern table/card spacing, GitHub raw assets favicon + Apple Touch Icon support, iOS PWA meta, paste/drop auto analyze, server ellipsis title, copy success feedback, and preserved selectable batch actions, landing test, availability check, cleanup, Clash/URI export, and copy-alive-nodes action.
+#!name=SubViz Surge v0.1.40
+#!desc=Subscription node visual analyzer local UI for Surge. v0.1.40 second-round compatibility patch: broader URI export for Hysteria2/TUIC/Snell/SOCKS/HTTP/AnyTLS, flow-style Clash parsing, cleaner YAML export, and clearer remote subscription errors.
 #!category=Subscription
 
 [General]

@@ -44,7 +44,7 @@ http://subviz.store/
 如果页面没有刷新到最新版，可以加版本参数：
 
 ```text
-http://subviz.store/?v=139
+http://subviz.store/?v=140
 ```
 
 健康检查：
@@ -59,7 +59,7 @@ http://subviz.store/api/health
 {
   "ok": true,
   "name": "SubViz Surge",
-  "version": "0.1.39"
+  "version": "0.1.40"
 }
 ```
 
@@ -260,7 +260,7 @@ http://subviz.store/api/health
 尝试：
 
 ```text
-http://subviz.store/?v=139
+http://subviz.store/?v=140
 ```
 
 或在 Surge 外部资源里更新脚本。
@@ -295,15 +295,17 @@ CDN、中转、伪装域名场景下，落地检测更接近真实情况。
 ## 当前版本
 
 ```text
-v0.1.39
+v0.1.40
 ```
 
-## v0.1.39 修复内容
+## v0.1.40 修复内容
 
-- Clash YAML 导出改为递归 YAML 输出，保留 `ws-opts` / `grpc-opts` / `reality-opts` 等嵌套对象。
-- 补全 VLESS Reality 的 `reality-opts.public-key` / `short-id` 兼容，提升测活和落地检测的临时策略生成成功率。
-- 增强 URI 解析中的 IPv6 host:port 拆分。
-- 模块默认关闭 `debug`，减少日志中暴露订阅敏感信息的风险。
-- 远程订阅拉取保持不限制，仍按原逻辑直接拉取用户输入 URL。
+- 第二轮兼容性修复：扩大通用 URI 导出覆盖，新增/增强 `hysteria2` / `tuic` / `snell` / `socks5` / `http` / `https` / `anytls` 等协议的 URI 生成。
+- 增强 Clash flow-style 写法解析，支持 `{ grpc-opts: { ... } }`、`{ ws-opts: { headers: { Host: ... } } }`、`alpn: [h3]` 这类内联嵌套结构。
+- Clash YAML 导出时继续保留 `ws-opts` / `grpc-opts` / `reality-opts` 嵌套结构，并清理导出中的空字段，避免生成一堆 `cipher: ""`、`path: ""`。
+- VLESS Reality URI 导出现在会根据 `reality-opts.public-key` 自动导出 `security=reality`，不再被 `tls: true` 误导成普通 TLS。
+- gRPC 节点会自动保留/恢复 `grpc-opts.grpc-service-name`，URI 导出时映射为 `serviceName`。
+- 远程订阅拉取仍不做 URL 限制；仅补充 HTTP 4xx/5xx 错误提示和空订阅提醒，方便排查订阅源问题。
+- 演示数据扩展为 6 个节点，覆盖 Trojan WS、VLESS Reality、SS、Hysteria2、TUIC、VMess gRPC。
 
 
