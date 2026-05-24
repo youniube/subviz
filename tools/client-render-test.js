@@ -20,6 +20,14 @@ const ROOT = path.resolve(__dirname, '..');
 const clientPath = path.join(ROOT, 'src', 'client', 'app.js');
 const code = fs.readFileSync(clientPath, 'utf8');
 
+// ---- 0) UI 回归：截图反馈的冗余元素不能再出现 ----
+assert(!code.includes('一键复制干净配置'), 'top quick copy button should not be rendered');
+assert(!code.includes('sv136CopyAliveQuick'), 'top copy alive quick button should not be rendered');
+assert(!/sv136AddTitle\('sv136(Select|Action|Advanced|Export)Title'/.test(code),
+  'sv136 must not add duplicate section titles already added by sv135');
+assert(!/summary:before\{content:"[▸▾]/.test(code),
+  'Gist details summary should not render extra disclosure symbol');
+
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'Assertion failed'); }
 
 // 拦截 console.log 输出，捕获被静默吞掉的 ReferenceError / TypeError

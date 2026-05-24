@@ -613,7 +613,7 @@ window.addEventListener('DOMContentLoaded',function(){sv135Refine();sv135UpdateH
       'body.sv136 .sv133-grid button,body.sv136 .sv-mini-grid button,body.sv136 .sv-op-grid button,body.sv136 .toolbar button{min-height:48px!important;margin:0!important;padding:12px 10px!important;white-space:normal!important;word-break:keep-all!important;line-height:1.28!important;}'+
       'body.sv136 .sv-meta-row{background:#0F1118;border:1px solid var(--border-color);border-radius:16px;padding:10px 12px;}body.sv136 .sv-pill{background:var(--color-gold-dim)!important;color:var(--color-gold)!important;border:1px solid rgba(241,184,19,.22)!important;}'+
       'body.sv136 .rowchk{accent-color:var(--color-gold)!important;width:23px!important;height:23px!important;}body.sv136 input[type="checkbox"]{accent-color:var(--color-gold)!important;}'+
-      'body.sv136 details summary{color:#fff!important;list-style:none;}body.sv136 details summary::-webkit-details-marker{display:none;}body.sv136 details summary:before{content:"▸";color:var(--color-gold);margin-right:8px;}body.sv136 details[open] summary:before{content:"▾";}'+
+      'body.sv136 details summary{color:#fff!important;list-style:none;}body.sv136 details summary::-webkit-details-marker{display:none;}'+
       'body.sv136 .exportbar{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(94px,.45fr) minmax(94px,.45fr)!important;gap:10px!important;align-items:stretch!important;}body.sv136 #sv133ExportGrid{grid-template-columns:repeat(auto-fit,minmax(124px,1fr))!important;}'+
       'body.sv136 table{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;background:var(--bg-card)!important;border:1px solid var(--border-color)!important;border-radius:18px!important;overflow:hidden!important;margin-top:18px!important;}'+
       'body.sv136 th{background:var(--bg-card-2)!important;color:#fff!important;font-size:13px!important;font-weight:800!important;letter-spacing:.04em!important;text-align:left!important;padding:14px 14px!important;border-bottom:1px solid var(--border-color)!important;border-top:0!important;}'+
@@ -627,17 +627,8 @@ window.addEventListener('DOMContentLoaded',function(){sv135Refine();sv135UpdateH
       '@media(max-width:390px){body.sv136 #cards.grid{gap:10px!important;}body.sv136 .stat{padding:15px!important;}body.sv136 .stat b{font-size:28px!important;}body.sv136 .sv133-grid,body.sv136 .sv133-grid.three,body.sv136 .sv-mini-grid,body.sv136 .sv-op-grid,body.sv136 .toolbar{grid-template-columns:repeat(2,minmax(0,1fr))!important;}body.sv136 tbody tr{grid-template-columns:34px minmax(0,1fr) 84px!important;}body.sv136 button{font-size:15px!important;padding-left:8px!important;padding-right:8px!important;}}';
     document.head.appendChild(stl);
   }
-  function sv136AddTitle(id,text,before){if(!before||sv136ById(id))return;var t=document.createElement('div');t.id=id;t.className='sv136-section-title';t.textContent=text;before.parentNode.insertBefore(t,before)}
-  function ensureCopyQuick(){
-    var hero=document.querySelector('.hero'); if(!hero||sv136ById('sv136QuickCopy'))return;
-    var status=sv136ById('status'); var row=document.createElement('div'); row.className='sv136-quick-row';
-    row.innerHTML='<button type="button" id="sv136QuickCopy" class="sv136-primary">一键复制干净配置</button><button type="button" id="sv136CopyAliveQuick">复制可用节点</button>';
-    hero.insertBefore(row,status||null);
-    sv136ById('sv136QuickCopy').onclick=function(){if(window.copyExport)window.copyExport();var b=this;setTimeout(function(){var txt=(sv136ById('status')&&sv136ById('status').textContent)||'';if(txt.indexOf('已复制')>=0)sv136PulseButton(b)},120)};
-    sv136ById('sv136CopyAliveQuick').onclick=function(){if(window.copyAliveExport)window.copyAliveExport();var b=this;setTimeout(function(){var txt=(sv136ById('status')&&sv136ById('status').textContent)||'';if(txt.indexOf('已复制')>=0)sv136PulseButton(b)},120)};
-  }
   function sv136EnsureDashboard(){
-    document.body.classList.add('sv136');installStyles();ensureCopyQuick();
+    document.body.classList.add('sv136');installStyles();
     addMeta('apple-mobile-web-app-capable','yes');addMeta('apple-mobile-web-app-status-bar-style','black-translucent');addMeta('apple-mobile-web-app-title','SubViz');
     var p=closestCard(sv136ById('protocols')),c=closestCard(sv136ById('countries'));
     if(p&&c&&!sv136ById('sv135Charts')){var grid=document.createElement('div');grid.id='sv135Charts';grid.className='sv135-chart-grid';p.parentNode.insertBefore(grid,p);grid.appendChild(p);grid.appendChild(c);var h=document.createElement('div');h.id='sv135Health';h.className='card';h.innerHTML='<h2>节点健康状况</h2><div class="health-grid"><div class="health-cell"><span>可用</span><b id="hAlive">0</b></div><div class="health-cell"><span>不可用</span><b id="hDead">0</b></div><div class="health-cell"><span>未测</span><b id="hUntested">0</b></div><div class="health-cell"><span>当前筛选</span><b id="hScope">0</b></div></div><div id="hBars" class="small muted">测活后这里会显示可用比例。</div>';grid.appendChild(h)}
@@ -646,10 +637,7 @@ window.addEventListener('DOMContentLoaded',function(){sv135Refine();sv135UpdateH
   function sv136UpdateHealth(nodes){sv136EnsureDashboard();var h=health(nodes||[]);[['hAlive',h.alive],['hDead',h.dead],['hUntested',h.untested],['hScope',h.total]].forEach(function(x){var el=sv136ById(x[0]);if(el)el.textContent=x[1]});var b=sv136ById('hBars');if(b){var p=h.total?Math.round(h.alive/h.total*100):0;b.innerHTML='<div class="bar"><div>可用率</div><div class="track"><div class="fill" style="width:'+p+'%"></div></div><b>'+p+'%</b></div>'}}
   function sv136Refine(){
     sv136EnsureDashboard();
-    sv136AddTitle('sv136SelectTitle','选择范围',sv136ById('sv133SelectGrid')||sv136ById('sv132SelectGrid'));
-    sv136AddTitle('sv136ActionTitle','常用操作',sv136ById('sv133MainGrid')||sv136ById('sv132MainOps'));
-    sv136AddTitle('sv136AdvancedTitle','高级设置',document.querySelector('.rulebox'));
-    sv136AddTitle('sv136ExportTitle','导出与复制',sv136ById('sv133ExportGrid')||sv136ById('sv132ExportGrid')||sv136ById('exportType'));
+    /* Section titles are added by sv135. Keep sv136 focused on visual polish to avoid duplicate labels. */
     var alive=sv136ById('alive');if(alive)alive.textContent='测活';
     var geo=sv136ById('geo');if(geo)geo.textContent='GeoIP 补全';
     var landing=sv136ById('landing');if(landing)landing.textContent='落地检测';
