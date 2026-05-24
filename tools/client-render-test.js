@@ -25,8 +25,17 @@ assert(!code.includes('一键复制干净配置'), 'top quick copy button should
 assert(!code.includes('sv136CopyAliveQuick'), 'top copy alive quick button should not be rendered');
 assert(!/sv136AddTitle\('sv136(Select|Action|Advanced|Export)Title'/.test(code),
   'sv136 must not add duplicate section titles already added by sv135');
-assert(!/summary:before\{content:"[▸▾]/.test(code),
-  'Gist details summary should not render extra disclosure symbol');
+assert(/summary:before\{content:"▸"/.test(code),
+  'details summary disclosure marker should stay visible');
+
+const htmlPath = path.join(ROOT, 'src', 'server', 'index.html');
+const htmlTemplate = fs.readFileSync(htmlPath, 'utf8');
+assert(!/<html[\s\S]*?'\+\s*\n\s*'<style>/.test(htmlTemplate),
+  'HTML template must not leak JS string concatenation fragments before <style>');
+assert(!/<div class="wrap">\s*\n'\+\s*\n\s*'<div class="hero">/.test(htmlTemplate),
+  'HTML template must not leak JS string concatenation fragments inside body');
+assert(!/<\/html>\s*\n'\+/.test(htmlTemplate),
+  'HTML template must not leak trailing concatenation fragments');
 
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'Assertion failed'); }
 
