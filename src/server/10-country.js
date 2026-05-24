@@ -1,3 +1,9 @@
+  var CONFIDENCE_FLAG = 98;
+  var CONFIDENCE_ISO = 92;
+  var CONFIDENCE_NAME = 90;
+  var CONFIDENCE_GEOIP = 78;
+  var CONFIDENCE_GEOIP_WEAK = 70;
+  var CONFIDENCE_CDN = 60;
   var COUNTRY = {
     HK:['Hong Kong','\u9999\u6e2f',['HK','HKG'],['\u9999\u6e2f','Hong Kong']],
     TW:['Taiwan','\u53f0\u6e7e',['TW','TWN'],['\u53f0\u6e7e','\u81fa\u7063','Taiwan']],
@@ -60,7 +66,7 @@
     name = String(name || ''); server = String(server || ''); extra = extra || {};
     var text = [name, server, extra.country, extra.countryCode, extra.sni, extra.servername, extra.Host, extra.host].join(' ');
     var explicit = flagToCC(text);
-    if (explicit && COUNTRY[explicit]) return countryInfo(explicit, 'flag', 98);
+    if (explicit && COUNTRY[explicit]) return countryInfo(explicit, 'flag', CONFIDENCE_FLAG);
     var upper = text.toUpperCase();
     var keys = Object.keys(COUNTRY);
     for (var i = 0; i < keys.length; i++) {
@@ -69,15 +75,15 @@
       for (var j = 0; j < arr.length; j++) {
         var token = arr[j].toUpperCase();
         var re = new RegExp('(?:^|[^A-Z0-9])' + token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:[^A-Z0-9]|$)');
-        if (re.test(upper)) return countryInfo(code, 'iso', 92);
+        if (re.test(upper)) return countryInfo(code, 'iso', CONFIDENCE_ISO);
       }
       var names = COUNTRY[code][3];
       for (var k = 0; k < names.length; k++) {
-        if (text.indexOf(names[k]) >= 0 || upper.indexOf(String(names[k]).toUpperCase()) >= 0) return countryInfo(code, 'name', 90);
+        if (text.indexOf(names[k]) >= 0 || upper.indexOf(String(names[k]).toUpperCase()) >= 0) return countryInfo(code, 'name', CONFIDENCE_NAME);
       }
     }
     if (/CF\s*\u4e2d\u8f6c|\u4e2d\u8f6c|Cloudflare|Anycast|CDN/i.test(text) || isCFServer(server)) {
-      return { countryCode: 'CDN', country: 'CDN/\u4e2d\u8f6c', countrySource: 'cdn', countryConfidence: 60 };
+      return { countryCode: 'CDN', country: 'CDN/\u4e2d\u8f6c', countrySource: 'cdn', countryConfidence: CONFIDENCE_CDN };
     }
     return { countryCode: 'UN', country: '\u672a\u77e5', countrySource: 'none', countryConfidence: 0 };
   }

@@ -12,13 +12,26 @@ const SERVER_PARTS = [
   'src/server/30-fetch-geo.js',
   'src/server/40-surge-policy.js',
   'src/server/50-landing-availability.js',
+  'src/server/60-gist.js',
 ];
 const ROUTER_PART = 'src/server/90-html-router.js';
 const CLIENT_PART = 'src/client/app.js';
 const OUT_FILE = 'subviz.js';
 
 function read(rel) {
-  return fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/[ \t]+$/gm, '').replace(/\s*$/, '\n');
+  const full = path.join(ROOT, rel);
+  if (!fs.existsSync(full)) throw new Error('Missing source file: ' + rel);
+  return fs.readFileSync(full, 'utf8').replace(/[ \t]+$/gm, '').replace(/\s*$/, '\n');
+}
+
+function verifySources() {
+  const all = SERVER_PARTS.concat([ROUTER_PART, CLIENT_PART]);
+  all.forEach(rel => {
+    const full = path.join(ROOT, rel);
+    if (!fs.existsSync(full)) throw new Error('Missing source file: ' + rel);
+    const { execSync } = require('child_process');
+    execSync('node --check ' + JSON.stringify(full), { stdio: 'inherit' });
+  });
 }
 
 function parseMarker(bootstrap) {
@@ -29,19 +42,24 @@ function parseMarker(bootstrap) {
 }
 
 function build() {
+  verifySources();
   const bootstrap = read(SERVER_PARTS[0]);
   const marker = parseMarker(bootstrap);
   let out = '';
   out += `var ${marker} = true;\n`;
   out += 'var SubViz = (function () {\n';
   out += "  'use strict';\n";
-  out += SERVER_PARTS.map(read).join('\n');
+  const sampleYaml = fs.readFileSync(path.join(ROOT, 'src/server/sample.yaml'), 'utf8');
+  out += SERVER_PARTS.map(read).join('\n').replace("'%%SAMPLE_YAML%%'", JSON.stringify(sampleYaml));
   out += '\n';
   out += '  var CLIENT_JS = ' + JSON.stringify(read(CLIENT_PART)) + ';\n';
-  out += read(ROUTER_PART);
+  const indexHtml = fs.readFileSync(path.join(ROOT, 'src/server/index.html'), 'utf8');
+  out += read(ROUTER_PART).replace("'%%INDEX_HTML%%'", JSON.stringify(indexHtml));
   out += '})();\n';
   out += 'SubViz.main();\n';
   fs.writeFileSync(path.join(ROOT, OUT_FILE), out, 'utf8');
+  const { execSync } = require('child_process');
+  execSync('node --check ' + JSON.stringify(path.join(ROOT, OUT_FILE)), { stdio: 'inherit' });
 }
 
 build();

@@ -27,11 +27,35 @@
     if (!hp) return { host:'', port:'' };
     if (hp[0] === '[') {
       var end = hp.indexOf(']');
-      if (end > 0) return { host: hp.slice(1, end), port: hp.slice(end + 1).replace(/^:/, '') };
+      if (end > 0) {
+        var afterBracket = hp.slice(end + 1);
+        return { host: hp.slice(1, end), port: afterBracket.length > 1 ? afterBracket.replace(/^:/, '') : '' };
+      }
     }
     var idx = hp.lastIndexOf(':');
     if (idx > 0) return { host: hp.slice(0, idx), port: hp.slice(idx + 1) };
     return { host: hp, port:'' };
+  }
+  var SS_CIPHERS = [
+    'aes-128-gcm','aes-192-gcm','aes-256-gcm',
+    'aes-128-cfb','aes-192-cfb','aes-256-cfb',
+    'aes-128-ctr','aes-192-ctr','aes-256-ctr',
+    'chacha20-ietf-poly1305','xchacha20-ietf-poly1305',
+    'chacha20-ietf','chacha20','rc4-md5',
+    '2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm',
+    '2022-blake3-chacha20-poly1305','2022-blake3-chacha8-poly1305',
+    'none','plain','rc4'
+  ];
+  function ssCipherSplit(userinfo) {
+    userinfo = String(userinfo || '');
+    var lower = userinfo.toLowerCase();
+    for (var i = 0; i < SS_CIPHERS.length; i++) {
+      var c = SS_CIPHERS[i];
+      if (lower.indexOf(c) === 0 && userinfo.length > c.length && userinfo[c.length] === ':') {
+        return c.length;
+      }
+    }
+    return -1;
   }
   function normalizeProxyObject(obj) {
     obj = obj || {};
@@ -97,21 +121,21 @@
 
   function buildNode(obj, format, raw) {
     obj = normalizeProxyObject(obj || {});
-    var name = clean(obj.name || obj.ps || obj.remarks || obj.remark || obj.tag || '');
-    var protocol = clean((obj.type || obj.protocol || '')).toLowerCase();
+    var name = obj.name;
+    var protocol = obj.type.toLowerCase();
     if (protocol === 'socks') protocol = 'socks5';
     if (protocol === 'hy2') protocol = 'hysteria2';
-    var server = clean(obj.server || obj.add || obj.host || obj.address || obj.hostname || '');
-    var port = clean(obj.port || '');
-    var network = clean(obj.network || obj.net || obj.transport || '');
-    var tls = clean(obj.tls || obj.security || '');
+    var server = obj.server;
+    var port = obj.port;
+    var network = obj.network;
+    var tls = obj.tls;
     if (!protocol && raw) {
       var m = String(raw).match(/^([a-z0-9+.-]+):\/\//i);
       if (m) protocol = m[1].toLowerCase();
     }
     var c = detectCountry(name, server, obj);
     return {
-      id: clean(obj.uuid || obj.id || obj.username || obj.password || ''), name: name || server || 'node', protocol: protocol || 'unknown',
+      id: obj.uuid || obj.password || '', name: name || server || 'node', protocol: protocol || 'unknown',
       server: server, port: port, network: network, tls: tls, countryCode: c.countryCode, country: c.country,
       countrySource: c.countrySource, countryConfidence: c.countryConfidence,
       sourceFormat: format || 'unknown', raw: raw || safeStringify(obj, 0), extra: obj,
@@ -120,12 +144,7 @@
   }
   function setFingerprint(n) {
     var e = (n && n.extra) || {};
-    var sni = clean(e.sni || e.servername || e.serverName || e['server-name'] || e.server_name || '');
-    var host = clean(e.Host || e.host || e['ws-host'] || '');
-    var path = clean(e.path || e['ws-path'] || '');
-    var cipher = clean(e.cipher || e.method || e['encrypt-method'] || e.encrypt_method || '');
-    var auth = clean(e.uuid || n.id || e.password || e.passwd || e.pass || '');
-    n.fingerprint = [n.protocol, n.server, n.port, n.network, n.tls, sni, host, path, cipher, auth].join('|').toLowerCase();
+    n.fingerprint = [n.protocol, n.server, n.port, n.network, n.tls, e.sni, e.Host, e.path, e.cipher, e.uuid || n.id || e.password].join('|').toLowerCase();
     return n;
   }
 
@@ -286,10 +305,13 @@
           userinfo = at >= 0 ? decoded.slice(0, at) : '';
           hp = at >= 0 ? decoded.slice(at + 1) : decoded;
         }
-        var cidx = userinfo.indexOf(':');
+        var cidx = ssCipherSplit(userinfo);
         if (cidx >= 0) {
           obj.cipher = decodeURIComponentSafe(userinfo.slice(0, cidx));
           obj.password = decodeURIComponentSafe(userinfo.slice(cidx + 1));
+        } else if (userinfo.indexOf(':') >= 0) {
+          obj.cipher = decodeURIComponentSafe(userinfo.slice(0, userinfo.indexOf(':')));
+          obj.password = decodeURIComponentSafe(userinfo.slice(userinfo.indexOf(':') + 1));
         }
         var hpParsed = splitHostPort(hp); obj.server = hpParsed.host; obj.port = hpParsed.port; obj.name = name; obj.type = 'ss';
         return setFingerprint(buildNode(obj, 'uri', line));
@@ -326,7 +348,7 @@
       var rawLine = String(line || '').trim();
       if (!rawLine || /^#|^;/.test(rawLine)) return;
       if (/^\[Proxy\]/i.test(rawLine)) { inProxy = true; return; }
-      if (/^\[[^\]]+\]/.test(rawLine)) { inProxy = false; return; }
+      if (/^\[[^\]]+\]/.test(rawLine) && !/^\[Proxy\]/i.test(rawLine)) { inProxy = false; return; }
       if (!inProxy && rawLine.indexOf(' = ') < 0) return;
       var eq = rawLine.indexOf('='); if (eq < 0) return;
       var name = clean(rawLine.slice(0, eq)); var rhs = clean(rawLine.slice(eq + 1));
@@ -348,12 +370,25 @@
     });
     return nodes;
   }
+  function dedup(nodes) {
+    var seen = {}, out = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i]; setFingerprint(n);
+      if (!seen[n.fingerprint]) { seen[n.fingerprint] = true; out.push(n); }
+    }
+    return out;
+  }
   function parseSubscription(text) {
     text = maybeDecodeBase64(text);
     var nodes = [];
     if (/proxies\s*:/i.test(text) || /^\s*-\s*name\s*:/m.test(text)) nodes = nodes.concat(parseClash(text));
     if (/\[Proxy\]/i.test(text) || /^\s*[^=\n]+\s*=\s*(?:ss|trojan|vmess|vless|hysteria2|hy2|tuic|snell|socks5|http|https)\s*,/im.test(text)) nodes = nodes.concat(parseSurge(text));
-    String(text || '').split(/\r?\n/).forEach(function (line) { var n = parseURI(line); if (n) nodes.push(n); });
+    var structuredFPs = {};
+    nodes.forEach(function (n) { structuredFPs[n.fingerprint] = true; });
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      var n = parseURI(line);
+      if (n && !structuredFPs[n.fingerprint]) nodes.push(n);
+    });
     return analyzeNodes(nodes);
   }
   function analyzeNodes(nodes) {

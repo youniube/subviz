@@ -2,16 +2,25 @@ var DATA=null;
 var GEO_CACHE={};
 var GEO_RUNNING=false;
 var SELECTED={};
+/* ── Consolidated style entry point ── */
+function installStyles(){
+  sv132EnsureStyle();
+  sv133InstallStyle();
+  sv135InstallStyle();
+}
+
+/* ── Event bus for plugin hooks ── */
+var _hooks={};
+function hook(event,fn){if(!_hooks[event])_hooks[event]=[];_hooks[event].push(fn)}
+function emit(event){var a=[].slice.call(arguments,1);(_hooks[event]||[]).forEach(function(fn){try{fn.apply(null,a)}catch(e){console.error('[hook:'+event+']',e)}})}
 function selectedCount(){return Object.keys(SELECTED).filter(function(k){return SELECTED[k]}).length}
 function selectedNodes(){if(!DATA)return[];return (DATA.nodes||[]).filter(function(n){return n&&n._sid&&SELECTED[n._sid]})}
 function operationNodes(action){var a=selectedNodes();if(!a.length){st('请先勾选要'+action+'的节点，或点击“全选当前”。');return []}return a}
 function updateSelectUI(){var c=selectedCount();var el=$('selCount');if(el)el.textContent='已选 '+c+' 个'}
 function toggleSelect(sid,checked){if(!sid)return;if(checked)SELECTED[sid]=1;else delete SELECTED[sid];updateSelectUI()}
-window.toggleSelect=toggleSelect;
 function selectCurrent(){var a=filtered();a.forEach(function(n){if(n._sid)SELECTED[n._sid]=1});apply();st('已全选当前筛选结果：'+a.length+' 个节点')}
 function invertCurrent(){filtered().forEach(function(n){if(!n._sid)return;if(SELECTED[n._sid])delete SELECTED[n._sid];else SELECTED[n._sid]=1});apply();st('已反选当前筛选结果')}
 function clearSelected(){SELECTED={};apply();st('已清空选择')}
-window.selectCurrent=selectCurrent;window.invertCurrent=invertCurrent;window.clearSelected=clearSelected;
 function $(id){return document.getElementById(id)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c})}
 function st(s){$('status').textContent=s}
@@ -21,12 +30,12 @@ function uniq(nodes){var m={},a=[];(nodes||[]).forEach(function(n){var k=n.finge
 function addCount(m,k){k=k||'未知';m[k]=(m[k]||0)+1}
 function toArr(m){return Object.keys(m).map(function(k){return{key:k,count:m[k]}}).sort(function(a,b){return b.count-a.count})}
 function recalc(d){var ns=d.nodes||[],byP={},byC={},byCC={},byF={},seen={},dups=0;ns.forEach(function(n){addCount(byP,n.protocol);addCount(byC,n.country);addCount(byCC,n.countryCode||'UN');addCount(byF,n.sourceFormat||'unknown');var fp=n.fingerprint||[n.protocol,n.server,n.port,n.network,n.tls].join('|').toLowerCase();if(seen[fp])dups++;else seen[fp]=1});d.summary={total:ns.length,unique:Object.keys(seen).length,duplicates:dups,protocols:Object.keys(byP).length,countries:Object.keys(byC).length};d.stats={byProtocol:toArr(byP),byCountry:toArr(byC),byCountryCode:toArr(byCC),bySourceFormat:toArr(byF)};return d}
-function render(d){var isNew=(d!==DATA);if(isNew)SELECTED={};(d.nodes||[]).forEach(function(n,i){if(!n._sid)n._sid='sv_'+i;if(!n.originalName)n.originalName=n.name});DATA=recalc(d);var s=DATA.summary||{};var labels=['总节点','唯一节点','重复节点','协议数','国家/地区'];var vals=[s.total,s.unique,s.duplicates,s.protocols,s.countries];$('cards').innerHTML=labels.map(function(l,i){return '<div class="stat"><span class="muted">'+l+'</span><b>'+(vals[i]||0)+'</b></div>'}).join('');var p=DATA.stats.byProtocol||[],c=DATA.stats.byCountry||[];$('protocols').innerHTML=p.length?p.map(function(x){return bar(x,p[0].count)}).join(''):'暂无数据';$('countries').innerHTML=c.length?c.slice(0,30).map(function(x){return bar(x,c[0].count)}).join(''):'暂无数据';fillSelect('pf',p);fillSelect('cf',c);apply()}
+function render(d){var isNew=(d!==DATA);if(isNew)SELECTED={};(d.nodes||[]).forEach(function(n,i){if(!n._sid)n._sid='sv_'+i;if(!n.originalName)n.originalName=n.name});DATA=recalc(d);var s=DATA.summary||{};var labels=['总节点','唯一节点','重复节点','协议数','国家/地区'];var vals=[s.total,s.unique,s.duplicates,s.protocols,s.countries];$('cards').innerHTML=labels.map(function(l,i){return '<div class="stat"><span class="muted">'+l+'</span><b>'+(vals[i]||0)+'</b></div>'}).join('');var p=DATA.stats.byProtocol||[],c=DATA.stats.byCountry||[];$('protocols').innerHTML=p.length?p.map(function(x){return bar(x,p[0].count)}).join(''):'暂无数据';$('countries').innerHTML=c.length?c.slice(0,30).map(function(x){return bar(x,c[0].count)}).join(''):'暂无数据';fillSelect('pf',p);fillSelect('cf',c);apply();emit('afterRender',DATA)}
 function fillSelect(id,arr){var old=$(id).value;$(id).innerHTML='<option value="">'+(id=='pf'?'全部协议':'全部地区')+'</option>'+(arr||[]).map(function(x){return '<option value="'+esc(x.key)+'">'+esc(x.key)+' ('+x.count+')</option>'}).join('');$(id).value=old}
 function filtered(){if(!DATA)return[];var ns=$('unique').checked?uniq(DATA.nodes):DATA.nodes;var q=$('q').value.toLowerCase(),pf=$('pf').value,cf=$('cf').value;return ns.filter(function(n){return(!pf||n.protocol==pf)&&(!cf||n.country==cf)&&(!q||(String(n.name)+String(n.server)+String(n.country)+String(n.protocol)+String(n.port)).toLowerCase().indexOf(q)>=0)})}
-function meta(n){var a=[];if(n.country)a.push(n.country);if(n.network)a.push(n.network);if(String(n.tls)==='true')a.push('TLS');if(n.geoCity)a.push(n.geoCity);if(n.aliveOK===true)a.push('可用 '+n.aliveLatency+'ms');else if(n.aliveOK===false)a.push('不可用:'+aliveErr(n.aliveError));if(n.landingError)a.push('失败:'+zhErr(n.landingError));return a.join(' · ')}
-function apply(){var a=filtered(),sc=selectedCount();$('count').textContent='当前显示 '+a.length+' / '+((DATA&&DATA.summary&&DATA.summary.total)||0)+' 个节点，已选 '+sc+' 个';updateSelectUI();$('tbody').innerHTML=a.map(function(n,i){var chk=SELECTED[n._sid]?' checked':'';return '<tr><td><input type="checkbox" class="rowchk" data-sid="'+esc(n._sid||'')+'" onchange="window.toggleSelect&&window.toggleSelect(this.dataset.sid,this.checked)"'+chk+'></td><td>'+(i+1)+'</td><td>'+esc(n.name)+'<div class="small">'+esc(meta(n))+'</div></td><td><span class="tag">'+esc(n.protocol)+'</span></td><td>'+esc(n.server)+'</td><td>'+esc(n.port)+'</td></tr>'}).join('')||'<tr><td colspan="6" class="muted">暂无数据</td></tr>'}
-function loadJSON(url,opt){return fetch(url,opt).then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){throw new Error(t.slice(0,200)||e)}})}
+function meta(n){var a=[];if(n.country)a.push(esc(n.country));if(n.network)a.push(esc(n.network));if(String(n.tls)==='true')a.push('TLS');if(n.geoCity)a.push(esc(n.geoCity));if(n.aliveOK===true)a.push('可用 '+esc(String(n.aliveLatency))+'ms');else if(n.aliveOK===false)a.push('不可用:'+esc(aliveErr(n.aliveError)));if(n.landingError)a.push('失败:'+esc(zhErr(n.landingError)));return a.join(' \u00b7 ')}
+function apply(){var a=filtered(),sc=selectedCount();$('count').textContent='当前显示 '+a.length+' / '+((DATA&&DATA.summary&&DATA.summary.total)||0)+' 个节点，已选 '+sc+' 个';updateSelectUI();$('tbody').innerHTML=a.map(function(n,i){var chk=SELECTED[n._sid]?' checked':'';return '<tr><td><input type="checkbox" class="rowchk" data-sid="'+esc(n._sid||'')+'" onchange="window.toggleSelect&&window.toggleSelect(this.dataset.sid,this.checked)"'+chk+'></td><td>'+(i+1)+'</td><td>'+esc(n.name)+'<div class="small">'+meta(n)+'</div></td><td><span class="tag">'+esc(n.protocol)+'</span></td><td>'+esc(n.server)+'</td><td>'+esc(n.port)+'</td></tr>'}).join('')||'<tr><td colspan="6" class="muted">暂无数据</td></tr>';emit('afterApply',a)}
+function loadJSON(url,opt){return fetch(url,opt).then(function(r){return r.text().then(function(t){return{status:r.status,ok:r.ok,text:t}})}).then(function(o){try{var j=JSON.parse(o.text);return j}catch(e){throw new Error(!o.ok?'HTTP '+o.status+': '+o.text.slice(0,150):(o.text.slice(0,200)||String(e)))}})}
 function analyzeURL(){var u=$('url').value.trim();if(!u){st('请先输入订阅 URL');return}st('按钮已触发，正在拉取分析…');loadJSON('/api/analyze?url='+encodeURIComponent(u)+'&t='+Date.now()).then(function(d){if(!d.ok)throw new Error(d.error||'error');render(d);st('分析完成：'+d.summary.total+' 个节点')}).catch(function(e){st('失败：'+e.message)})}
 function sample(){st('正在载入演示数据…');loadJSON('/api/sample?t='+Date.now()).then(render).then(function(){st('演示数据已加载')}).catch(function(e){st('失败：'+e.message)})}
 function analyzeText(){var t=$('raw').value;if(!t.trim()){st('请先粘贴订阅内容');return}st('正在分析粘贴内容…');loadJSON('/api/analyze-text?t='+Date.now(),{method:'POST',body:t,headers:{'Content-Type':'text/plain;charset=utf-8'}}).then(function(d){if(!d.ok)throw new Error(d.error||'error');render(d);st('分析完成：'+d.summary.total+' 个节点')}).catch(function(e){st('失败：'+e.message)})}
@@ -50,9 +59,7 @@ function normalizeRate(r){r=String(r||'').replace(/倍率\s*[:：=]?\s*/,'').rep
 function extractNameTags(n,opt){opt=opt||cleanupOptions();var e=n.extra||{};var src=[n.originalName,n.rawName,n.name,e.name,e.rate,e.ratio,e['倍率'],e.tag,e.label,e.remark,e.remarks,e.note,e.sni,e.servername,e.host,e.Host,e.path,e.plugin,e.mode].join(' ');var raw=String(src||''),txt=stripNoise(raw,opt.drop);var tags=[];var ms=raw.match(/(?:\d+(?:\.\d+)?\s*(?:x|X|×|倍)|倍率\s*[:：=]?\s*\d+(?:\.\d+)?)/g)||[];ms.forEach(function(r){r=normalizeRate(r);if(r)tags.push(r)});(opt.keep||[]).forEach(function(k){var kk=String(k||'').trim();if(!kk)return;if(/^\d+(?:\.\d+)?x$/i.test(kk)){if(new RegExp(escRe(kk),'i').test(raw))tags.push(kk.toLowerCase());return}var re=new RegExp(escRe(kk),'i');if(re.test(txt)||re.test(raw))tags.push(kk.toUpperCase()===kk?kk:kk)});return uniqTags(tags)}
 function templateCleanName(n,seq,width,opt){opt=opt||cleanupOptions();var c=codeName(n);var tags=extractNameTags(n,opt);var mp={flag:flag(c.cc),code:c.cc,country:c.cn,index:padNum(seq,width),seq:String(seq),tags:tags.join(' '),tag:tags.join(' ')};var out=String(opt.tpl||'{flag} {code}-{country} {index} {tags}').replace(/\{(flag|code|country|index|seq|tags|tag)\}/g,function(_,k){return mp[k]||''});return out.replace(/\s+/g,' ').replace(/\s+([,，;；])/g,'$1').trim()}
 function cleanNames(){if(!DATA){st('请先拉取或分析订阅');return}var nodes=operationNodes('清理节点名');if(!nodes.length)return;var opt=cleanupOptions();st('正在按清理规则重命名选中节点……');var totals={},seq={},cnt=0;nodes.forEach(function(n){if(!n.originalName)n.originalName=n.name;if(!n.rawName)n.rawName=n.originalName;var k=codeName(n).key;totals[k]=(totals[k]||0)+1});nodes.forEach(function(n){var c=codeName(n),w=Math.max(2,String(totals[c.key]||1).length);seq[c.key]=(seq[c.key]||0)+1;var nn=templateCleanName(n,seq[c.key],w,opt);if(nn&&nn!==n.name){n.name=nn;if(n.extra)n.extra.name=nn;cnt++}});render(DATA);st('已按规则清理选中节点名 '+cnt+' 个。已保留 rawName/originalName，可随时恢复；复制和导出会使用清理后的名称。')}
-window.cleanNames=cleanNames;
 function restoreNames(){if(!DATA){st('请先拉取或分析订阅');return}var nodes=operationNodes('恢复原始名');if(!nodes.length)return;var cnt=0;nodes.forEach(function(n){var old=n.rawName||n.originalName;if(old&&old!==n.name){n.name=old;if(n.extra)n.extra.name=old;cnt++}});render(DATA);st('已恢复选中节点原始名称 '+cnt+' 个')}
-window.restoreNames=restoreNames;
 function dl(name,txt,type){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:type||'text/plain;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000)}
 function b64utf8(s){return btoa(unescape(encodeURIComponent(String(s||''))))}
 function b64url(s){return b64utf8(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
@@ -107,8 +114,6 @@ function aliveErr(s){s=String(s||'');var l=s.toLowerCase();if(!s)return '检测�
 function aliveQS(){function val(id,def){var el=$(id);return el?String(el.value||def||'').trim():(def||'')}function ck(id){var el=$(id);return !!(el&&el.checked)}function add(k,v){v=String(v==null?'':v).trim();return v?'&'+encodeURIComponent(k)+'='+encodeURIComponent(v):''}var q='';q+=add('url',val('aliveUrl','http://connectivitycheck.platform.hicloud.com/generate_204'));q+=add('status',val('aliveStatus','204'));q+=add('timeout',val('aliveTimeout','3000'));q+=add('retries',val('aliveRetries','1'));q+=add('retry_delay',val('aliveRetryDelay','1000'));return q}
 function applyAliveName(n){if(!($('aliveShowLatency')&&$('aliveShowLatency').checked))return;if(n.aliveOK!==true||!n.aliveLatency)return;if(!n.nameBeforeAlive)n.nameBeforeAlive=n.name;n.name=String(n.nameBeforeAlive).replace(/^\[\d+ms\]\s*/,'');n.name='['+n.aliveLatency+'ms] '+n.name}
 function aliveTest(){try{if(!DATA){st('请先拉取或分析订阅');return}if(GEO_RUNNING){st('已有检测任务正在运行；如果刚才没有进度，请刷新页面后重试。');return}var nodes=operationNodes('测活');if(!nodes.length)return;GEO_RUNNING=true;var total=nodes.length,done=0,ok=0,fail=0,idx=0,errMap={},con=Math.max(1,Math.min(20,parseInt(($('aliveCon')&&$('aliveCon').value)||'5')||5));st('开始对选中的 '+total+' 个节点测活：0 / '+total);function next(){while(con>0&&idx<nodes.length){(function(n){idx++;con--;loadJSON('/api/availability?t='+Date.now()+aliveQS(),{method:'POST',body:JSON.stringify(n),headers:{'Content-Type':'application/json;charset=utf-8'}}).then(function(r){if(r&&r.ok&&r.alive){n.aliveOK=true;n.aliveLatency=r.latency||r.totalLatency||0;n.aliveStatus=r.status;n.aliveError='';applyAliveName(n);ok++}else{var er=aliveErr((r&&r.error)||'检测失败');n.aliveOK=false;n.aliveError=er;errMap[er]=(errMap[er]||0)+1;fail++}}).catch(function(e){var er=aliveErr(e.message||String(e));n.aliveOK=false;n.aliveError=er;errMap[er]=(errMap[er]||0)+1;fail++}).then(function(){done++;con++;if(done%5===0||done===total){recalc(DATA);apply();st('测活：'+done+' / '+total+'，可用 '+ok+'，不可用 '+fail)}if(done>=total){GEO_RUNNING=false;render(DATA);var es=Object.keys(errMap).slice(0,3).map(function(k){return k+'×'+errMap[k]}).join('；');st('测活完成：已检测选中的 '+total+' 个节点，可用 '+ok+'，不可用 '+fail+(es?'。失败原因：'+es:''))}else next()})})(nodes[idx])}}next()}catch(e){GEO_RUNNING=false;st('测活启动失败：'+aliveErr(e&&e.message?e.message:String(e)))}}
-window.aliveTest=aliveTest;
-
 function landingQS(){
   function val(id){var el=$(id);return el?String(el.value||'').trim():''}
   function add(k,v){v=String(v==null?'':v).trim();return v?'&'+encodeURIComponent(k)+'='+encodeURIComponent(v):''}
@@ -126,163 +131,155 @@ function landingQS(){
 function landingApplyOne(n,r){if(!r||!r.ok)return;var cc=String(r.countryCode||'').toUpperCase();if(!cc)return;n.landingOK=true;n.landingIP=r.landingIP||r.query||'';n.landingCountryCode=cc;n.landingCountry=r.country||cc;n.landingProvider=r.provider||'';n.landingCity=r.city||'';n.landingRegion=r.region||'';n.landingISP=r.isp||'';n.landingASN=r.asn||'';n.landingAPI=r.usedAPI||r.landingAPI||'';n.landingLatency=r.latency||'';n.landingAttempts=r.attempts||'';n.entryServer=r.entryServer||n.server;n.countryCode=cc;n.country=r.country||n.country||cc;n.countrySource='landing';n.countryConfidence=96;n.geoCity=r.city||'';n.geoISP=r.isp||'';n.geoASN=r.asn||'';}
 function applyLandingNames(){if(!DATA)return;var counters={};(DATA.nodes||[]).forEach(function(n){var cc=String(n.countryCode||'UN').toUpperCase();var cn=String(n.country||'未知');var key=cc+'|'+cn;counters[key]=(counters[key]||0)+1;var idx=('0'+counters[key]).slice(-2);if(n.countrySource==='landing'){var old=n.name;if(!n.originalName)n.originalName=old;n.name=flag(cc)+' '+cc+'-'+cn+' '+idx;}})}
 function landingTest(){try{if(!DATA){st('请先拉取或分析订阅');return}if(GEO_RUNNING){st('已有 GeoIP / 落地检测任务正在运行；如果刚才没有进度，请刷新页面后重试。');return}var nodes=operationNodes('落地检测');if(!nodes.length)return;GEO_RUNNING=true;var total=nodes.length,done=0,ok=0,fail=0,idx=0,errMap={},con=Math.max(1,Math.min(10,parseInt(($('landingCon')&&$('landingCon').value)||'2')||2));st('开始对选中的 '+total+' 个节点做落地检测：0 / '+total+'。');function next(){while(con>0&&idx<nodes.length){(function(n){idx++;con--;loadJSON('/api/landing?t='+Date.now()+landingQS(),{method:'POST',body:JSON.stringify(n),headers:{'Content-Type':'application/json;charset=utf-8'}}).then(function(r){if(r&&r.ok){landingApplyOne(n,r);ok++}else{var er=(r&&r.error)||'failed'; if(r&&r.descriptorProtocol)er+='('+r.descriptorProtocol+')'; var z=zhErr(er); n.landingOK=false;n.landingError=z;n.landingErrorRaw=er;errMap[z]=(errMap[z]||0)+1;fail++}}).catch(function(e){var er=e.message||String(e);var z=zhErr(er);n.landingOK=false;n.landingError=z;n.landingErrorRaw=er;errMap[z]=(errMap[z]||0)+1;fail++}).then(function(){done++;con++;if(done%2===0||done===total){applyLandingNames();recalc(DATA);apply();st('落地检测：'+done+' / '+total+'，成功 '+ok+'，失败 '+fail)}if(done>=total){GEO_RUNNING=false;applyLandingNames();render(DATA);var es=Object.keys(errMap).slice(0,3).map(function(k){return k+'×'+errMap[k]}).join('；');st('落地检测完成：已检测选中的 '+total+' 个节点，成功 '+ok+'，失败 '+fail+'。仅对成功获取落地的节点重命名。'+(es?' 失败原因：'+es:''))}else next()})})(nodes[idx])}}next()}catch(e){GEO_RUNNING=false;st('落地检测启动失败：'+zhErr(e&&e.message?e.message:String(e)))}}
+/* ── Centralized window exports ── */
+window.toggleSelect=toggleSelect;
+window.selectCurrent=selectCurrent;
+window.invertCurrent=invertCurrent;
+window.clearSelected=clearSelected;
+window.cleanNames=cleanNames;
+window.restoreNames=restoreNames;
 window.geoFill=geoFill;
 window.landingTest=landingTest;
-window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].forEach(function(id){var el=$(id);if(!el)return;el.addEventListener('input',apply);el.addEventListener('change',apply)});function bind(id,fn){var el=$(id);if(el)el.onclick=fn}bind('pull',analyzeURL);bind('demo',sample);bind('textBtn',analyzeText);bind('geo',geoFill);bind('landing',landingTest);bind('alive',aliveTest);bind('cleanNames',window.cleanNames);bind('applyRules',window.cleanNames);bind('restoreNames',window.restoreNames);bind('exportBtn',window.doExport);bind('copyBtn',window.copyExport);bind('selectCurrent',window.selectCurrent);bind('invertCurrent',window.invertCurrent);bind('clearSelected',window.clearSelected);});
+window.aliveTest=aliveTest;
+/* ── End exports ── */
+window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].forEach(function(id){var el=$(id);if(!el)return;el.addEventListener('input',apply);el.addEventListener('change',apply)});function bind(id,fn){var el=$(id);if(el)el.onclick=fn}bind('pull',analyzeURL);bind('demo',sample);bind('textBtn',analyzeText);bind('geo',geoFill);bind('landing',landingTest);bind('alive',function(){window.aliveTest()});bind('cleanNames',window.cleanNames);bind('applyRules',window.cleanNames);bind('restoreNames',window.restoreNames);bind('exportBtn',window.doExport);bind('copyBtn',window.copyExport);bind('selectCurrent',window.selectCurrent);bind('invertCurrent',window.invertCurrent);bind('clearSelected',window.clearSelected);});
 
-;(function(){
-  function svById(id){return document.getElementById(id)}
-  function svEnsureStyle(){
-    if(svById('sv132Style')) return;
-    var style=document.createElement('style');
-    style.id='sv132Style';
-    style.textContent=
-      '.sv-meta-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:10px 0 14px;}'+
-      '.sv-meta-row label{margin:0!important;}'+
-      '.sv-pill{display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;border-radius:999px;background:rgba(76,132,255,.16);color:#dce7ff;font-weight:700;margin:0;}'+
-      '.sv-mini-grid,.sv-op-grid{display:grid;gap:12px;margin:12px 0;}'+
-      '.sv-mini-grid{grid-template-columns:repeat(3,minmax(0,1fr));}'+
-      '.sv-op-grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}'+
-      '.sv-op-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}'+
-      '.sv-mini-grid button,.sv-op-grid button{width:100%;margin:0!important;padding:14px 10px!important;min-height:0;font-size:16px;line-height:1.25;}'+
-      '#sv132SelectGrid{margin-top:6px;margin-bottom:14px;}'+
-      '#sv132MainOps,#sv132NameOps,#sv132ExportGrid{margin-top:14px;}'+
-      '@media (max-width:640px){.sv-mini-grid,.sv-op-grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}.sv-op-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}}'+
-      '@media (max-width:430px){.sv-mini-grid,.sv-op-grid-3,.sv-op-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}.sv-meta-row{align-items:flex-start;}}';
-    document.head.appendChild(style);
+/* ── sv132: layout grid / meta row / copyAlive ── */
+function sv132ById(id){return document.getElementById(id)}
+function sv132EnsureStyle(){
+  if(sv132ById('sv132Style')) return;
+  var style=document.createElement('style');
+  style.id='sv132Style';
+  style.textContent=
+    '.sv-meta-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:10px 0 14px;}'+
+    '.sv-meta-row label{margin:0!important;}'+
+    '.sv-pill{display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;border-radius:999px;background:rgba(76,132,255,.16);color:#dce7ff;font-weight:700;margin:0;}'+
+    '.sv-mini-grid,.sv-op-grid{display:grid;gap:12px;margin:12px 0;}'+
+    '.sv-mini-grid{grid-template-columns:repeat(3,minmax(0,1fr));}'+
+    '.sv-op-grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}'+
+    '.sv-op-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}'+
+    '.sv-mini-grid button,.sv-op-grid button{width:100%;margin:0!important;padding:14px 10px!important;min-height:0;font-size:16px;line-height:1.25;}'+
+    '#sv132SelectGrid{margin-top:6px;margin-bottom:14px;}'+
+    '#sv132MainOps,#sv132NameOps,#sv132ExportGrid{margin-top:14px;}'+
+    '@media (max-width:640px){.sv-mini-grid,.sv-op-grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}.sv-op-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}}'+
+    '@media (max-width:430px){.sv-mini-grid,.sv-op-grid-3,.sv-op-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}.sv-meta-row{align-items:flex-start;}}';
+  document.head.appendChild(style);
+}
+function sv132MakeGrid(id, cls, beforeEl){
+  var wrap=sv132ById(id);
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id=id;
+    wrap.className=cls;
+    if(beforeEl&&beforeEl.parentNode) beforeEl.parentNode.insertBefore(wrap,beforeEl);
   }
-  function svMakeGrid(id, cls, beforeEl){
-    var wrap=svById(id);
-    if(!wrap){
-      wrap=document.createElement('div');
-      wrap.id=id;
-      wrap.className=cls;
-      if(beforeEl&&beforeEl.parentNode) beforeEl.parentNode.insertBefore(wrap,beforeEl);
-    }
-    return wrap;
-  }
-  function svMoveIntoGrid(ids, gridId, cls){
-    var first=null;
-    ids.forEach(function(id){if(!first&&svById(id)) first=svById(id)});
-    if(!first) return null;
-    var grid=svMakeGrid(gridId, cls, first);
-    ids.forEach(function(id){
-      var el=svById(id);
-      if(el){
-        el.classList.add('sv-compact-btn');
-        grid.appendChild(el);
-      }
-    });
-    return grid;
-  }
-  function svRefineLayout(){
-    svEnsureStyle();
-    var unique=svById('unique');
-    var sel=svById('selCount');
-    var uniqueLabel = unique && unique.closest ? unique.closest('label') : (unique ? unique.parentNode : null);
-    if(uniqueLabel && sel && !svById('sv132Meta')){
-      var row=document.createElement('div');
-      row.id='sv132Meta';
-      row.className='sv-meta-row';
-      uniqueLabel.parentNode.insertBefore(row, uniqueLabel);
-      row.appendChild(uniqueLabel);
-      row.appendChild(sel);
-    }
-    if(sel) sel.classList.add('sv-pill');
-
-    svMoveIntoGrid(['selectCurrent','invertCurrent','clearSelected'], 'sv132SelectGrid', 'sv-mini-grid');
-    svMoveIntoGrid(['geo','landing','alive'], 'sv132MainOps', 'sv-op-grid sv-op-grid-3');
-    svMoveIntoGrid(['cleanNames','restoreNames'], 'sv132NameOps', 'sv-op-grid sv-op-grid-2');
-
-    var cleanBtn=svById('cleanNames');
-    if(cleanBtn) cleanBtn.textContent='清理节点名';
-    var restoreBtn=svById('restoreNames');
-    if(restoreBtn) restoreBtn.textContent='恢复原名';
-
-    var copyBtn=svById('copyBtn');
-    if(copyBtn && !svById('copyAliveBtn')){
-      var btn=document.createElement('button');
-      btn.id='copyAliveBtn';
-      btn.className=copyBtn.className||'';
-      btn.textContent='复制可用节点';
-      copyBtn.parentNode.insertBefore(btn, copyBtn.nextSibling);
-      btn.addEventListener('click', window.copyAliveExport);
-    }
-    svMoveIntoGrid(['copyAliveBtn','copyBtn','exportBtn'], 'sv132ExportGrid', 'sv-op-grid sv-op-grid-3');
-  }
-  function svWithNodes(nodes, fn){
-    var oldSelectedNodes=selectedNodes;
-    try{
-      selectedNodes=function(){return nodes};
-      return fn();
-    } finally {
-      selectedNodes=oldSelectedNodes;
-    }
-  }
-  window.copyAliveExport=function copyAliveExport(){
-    try{
-      if(!DATA){st('请先拉取或分析订阅');return}
-      var picked=operationNodes('复制可用节点');
-      if(!picked.length) return;
-      var alive=picked.filter(function(n){return n&&n.aliveOK===true});
-      if(!alive.length){st('当前勾选节点中没有可用节点。请先执行测活，或调整勾选范围。');return}
-      var payload=svWithNodes(alive, buildExportPayload);
-      payload.name=String(payload.name||'').replace('selected','alive');
-      function ok(){st('已复制可用节点：'+alive.length+' 个（'+payload.label+'）')}
-      if(navigator.clipboard && window.isSecureContext){
-        navigator.clipboard.writeText(payload.text).then(ok).catch(function(){
-          if(fallbackCopy(payload.text)) ok();
-          else st('复制失败：当前浏览器不允许写入剪贴板');
-        });
-      } else if(fallbackCopy(payload.text)){
-        ok();
-      } else {
-        st('复制失败：当前浏览器不允许写入剪贴板');
-      }
-    }catch(e){
-      st('复制可用节点失败：'+e.message);
-    }
-  };
-
-  var __sv132OldUpdateSelectUI = updateSelectUI;
-  updateSelectUI = function(){
-    if(typeof __sv132OldUpdateSelectUI === 'function') __sv132OldUpdateSelectUI();
-    var c=selectedCount();
-    var el=svById('selCount');
+  return wrap;
+}
+function sv132MoveIntoGrid(ids, gridId, cls){
+  var first=null;
+  ids.forEach(function(id){if(!first&&sv132ById(id)) first=sv132ById(id)});
+  if(!first) return null;
+  var grid=sv132MakeGrid(gridId, cls, first);
+  ids.forEach(function(id){
+    var el=sv132ById(id);
     if(el){
-      el.textContent='已选 '+c+' 个';
-      el.classList.add('sv-pill');
+      el.classList.add('sv-compact-btn');
+      grid.appendChild(el);
     }
-    var countEl=svById('count');
-    if(countEl && DATA){
-      var total=((DATA&&DATA.summary&&DATA.summary.total)||0);
-      var current=filtered().length;
-      countEl.textContent='当前显示 '+current+' / '+total+' 个节点';
-    }
-  };
-
-  var __sv132OldApply = apply;
-  apply = function(){
-    __sv132OldApply();
-    updateSelectUI();
-    svRefineLayout();
-  };
-
-  window.addEventListener('DOMContentLoaded', function(){
-    svRefineLayout();
-    updateSelectUI();
   });
-})();
+  return grid;
+}
+function sv132RefineLayout(){
+  sv132EnsureStyle();
+  var unique=sv132ById('unique');
+  var sel=sv132ById('selCount');
+  var uniqueLabel = unique && unique.closest ? unique.closest('label') : (unique ? unique.parentNode : null);
+  if(uniqueLabel && sel && !sv132ById('sv132Meta')){
+    var row=document.createElement('div');
+    row.id='sv132Meta';
+    row.className='sv-meta-row';
+    uniqueLabel.parentNode.insertBefore(row, uniqueLabel);
+    row.appendChild(uniqueLabel);
+    row.appendChild(sel);
+  }
+  if(sel) sel.classList.add('sv-pill');
+  sv132MoveIntoGrid(['selectCurrent','invertCurrent','clearSelected'], 'sv132SelectGrid', 'sv-mini-grid');
+  sv132MoveIntoGrid(['geo','landing','alive'], 'sv132MainOps', 'sv-op-grid sv-op-grid-3');
+  sv132MoveIntoGrid(['cleanNames','restoreNames'], 'sv132NameOps', 'sv-op-grid sv-op-grid-2');
+  var cleanBtn=sv132ById('cleanNames');
+  if(cleanBtn) cleanBtn.textContent='清理节点名';
+  var restoreBtn=sv132ById('restoreNames');
+  if(restoreBtn) restoreBtn.textContent='恢复原名';
+  var copyBtn=sv132ById('copyBtn');
+  if(copyBtn && !sv132ById('copyAliveBtn')){
+    var btn=document.createElement('button');
+    btn.id='copyAliveBtn';
+    btn.className=copyBtn.className||'';
+    btn.textContent='复制可用节点';
+    copyBtn.parentNode.insertBefore(btn, copyBtn.nextSibling);
+    btn.addEventListener('click', window.copyAliveExport);
+  }
+  sv132MoveIntoGrid(['copyAliveBtn','copyBtn','exportBtn'], 'sv132ExportGrid', 'sv-op-grid sv-op-grid-3');
+}
+function sv132WithNodes(nodes, fn){
+  var oldSelectedNodes=selectedNodes;
+  try{
+    selectedNodes=function(){return nodes};
+    return fn();
+  } finally {
+    selectedNodes=oldSelectedNodes;
+  }
+}
+window.copyAliveExport=function copyAliveExport(){
+  try{
+    if(!DATA){st('请先拉取或分析订阅');return}
+    var picked=operationNodes('复制可用节点');
+    if(!picked.length) return;
+    var alive=picked.filter(function(n){return n&&n.aliveOK===true});
+    if(!alive.length){st('当前勾选节点中没有可用节点。请先执行测活，或调整勾选范围。');return}
+    var payload=sv132WithNodes(alive, buildExportPayload);
+    payload.name=String(payload.name||'').replace('selected','alive');
+    function ok(){st('已复制可用节点：'+alive.length+' 个（'+payload.label+'）')}
+    if(navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(payload.text).then(ok).catch(function(){
+        if(fallbackCopy(payload.text)) ok();
+        else st('复制失败：当前浏览器不允许写入剪贴板');
+      });
+    } else if(fallbackCopy(payload.text)){
+      ok();
+    } else {
+      st('复制失败：当前浏览器不允许写入剪贴板');
+    }
+  }catch(e){
+    st('复制可用节点失败：'+e.message);
+  }
+};
+function sv132UpdateSelectUI(){
+  var c=selectedCount();
+  var el=sv132ById('selCount');
+  if(el){
+    el.textContent='已选 '+c+' 个';
+    el.classList.add('sv-pill');
+  }
+  var countEl=sv132ById('count');
+  if(countEl && DATA){
+    var total=((DATA&&DATA.summary&&DATA.summary.total)||0);
+    var current=filtered().length;
+    countEl.textContent='当前显示 '+current+' / '+total+' 个节点';
+  }
+}
+hook('afterApply', function(){ sv132UpdateSelectUI(); sv132RefineLayout(); });
+window.addEventListener('DOMContentLoaded', function(){ sv132RefineLayout(); sv132UpdateSelectUI(); });
 
 
-;(function(){
-  function sv133ById(id){return document.getElementById(id)}
-  function sv133Style(){
-    if(sv133ById('sv133Style')) return;
-    var style=document.createElement('style');
-    style.id='sv133Style';
-    style.textContent =
-      'body.sv133 .wrap{max-width:980px;padding-bottom:70px;}'+
+/* ── sv133: theme / selectAlive / autoAlive ── */
+function sv133ById(id){return document.getElementById(id)}
+function sv133InstallStyle(){
+  if(sv133ById('sv133Style')) return;
+  var style=document.createElement('style');
+  style.id='sv133Style';
+  style.textContent =
+    'body.sv133 .wrap{max-width:980px;padding-bottom:70px;}'+
       'body.sv133 .hero,body.sv133 .card{border-radius:22px;padding:18px;margin:14px 0;}'+
       'body.sv133 h1{font-size:28px;line-height:1.2}body.sv133 h2{font-size:22px;margin-bottom:14px;}'+
       'body.sv133 button{min-height:48px;border-radius:18px;padding:13px 12px;font-size:16px;line-height:1.25;margin-top:0;}'+
@@ -378,7 +375,7 @@ window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].f
   }
   function sv133Refine(){
     document.body.classList.add('sv133');
-    sv133Style();
+    sv133InstallStyle();
     sv133EnsureAliveControls();
     var unique=sv133ById('unique'), sel=sv133ById('selCount');
     var uniqueLabel=unique&&unique.closest?unique.closest('label'):(unique?unique.parentNode:null);
@@ -466,26 +463,23 @@ window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].f
       next();
     }catch(e){GEO_RUNNING=false;st('测活启动失败：'+aliveErr(e&&e.message?e.message:String(e)))}
   };
-  var oldApply=apply;
-  apply=function(){oldApply();sv133Refine()};
-  window.addEventListener('DOMContentLoaded',function(){sv133Refine()});
-})();
+hook('afterApply', sv133Refine);
+window.addEventListener('DOMContentLoaded',function(){sv133Refine()});
 
-
-;(function(){
-  var PAGE_SIZE=120;
-  var viewLimit=PAGE_SIZE;
-  var lastKey='';
-  function byId(id){return document.getElementById(id)}
-  function parentCard(el){return el&&el.closest?el.closest('.card'):(el?el.parentNode:null)}
-  function addTitle(id,text,before){
-    if(!before||byId(id)) return;
+/* ── sv135: dashboard / health / pagination ── */
+var SV135_PAGE_SIZE=120;
+var sv135ViewLimit=SV135_PAGE_SIZE;
+var sv135LastKey='';
+function sv135ById(id){return document.getElementById(id)}
+function sv135ParentCard(el){return el&&el.closest?el.closest('.card'):(el?el.parentNode:null)}
+function sv135AddTitle(id,text,before){
+    if(!before||sv135ById(id)) return;
     var t=document.createElement('div');
     t.id=id;t.className='sv135-section-title';t.textContent=text;
     before.parentNode.insertBefore(t,before);
   }
-  function style(){
-    if(byId('sv135Style')) return;
+  function sv135InstallStyle(){
+    if(sv135ById('sv135Style')) return;
     var s=document.createElement('style');
     s.id='sv135Style';
     s.textContent=
@@ -524,10 +518,10 @@ window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].f
       '@media(max-width:390px){body.sv135 .sv133-grid,body.sv135 .sv133-grid.three,body.sv135 .sv-mini-grid,body.sv135 .sv-op-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}body.sv135 tbody tr{grid-template-columns:36px minmax(0,1fr) 86px!important;}body.sv135 button{font-size:15px!important;padding-left:8px!important;padding-right:8px!important;}}';
     document.head.appendChild(s);
   }
-  function ensureDashboard(){
-    document.body.classList.add('sv135');style();
-    var p=parentCard(byId('protocols')), c=parentCard(byId('countries'));
-    if(p&&c&&!byId('sv135Charts')){
+  function sv135EnsureDashboard(){
+    document.body.classList.add('sv135');sv135InstallStyle();
+    var p=sv135ParentCard(sv135ById('protocols')), c=sv135ParentCard(sv135ById('countries'));
+    if(p&&c&&!sv135ById('sv135Charts')){
       var grid=document.createElement('div');grid.id='sv135Charts';grid.className='sv135-chart-grid';
       p.parentNode.insertBefore(grid,p);grid.appendChild(p);grid.appendChild(c);
       var h=document.createElement('div');h.id='sv135Health';h.className='card';h.innerHTML='<h2>节点健康状况</h2><div class="health-grid"><div class="health-cell"><span>可用</span><b id="hAlive">0</b></div><div class="health-cell"><span>不可用</span><b id="hDead">0</b></div><div class="health-cell"><span>未测</span><b id="hUntested">0</b></div><div class="health-cell"><span>当前筛选</span><b id="hScope">0</b></div></div><div id="hBars" class="small muted">测活后这里会显示可用比例。</div>';
@@ -535,57 +529,56 @@ window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].f
     }
   }
   function health(nodes){var a=0,d=0,u=0;(nodes||[]).forEach(function(n){if(n.aliveOK===true)a++;else if(n.aliveOK===false)d++;else u++});return{alive:a,dead:d,untested:u,total:(nodes||[]).length}}
-  function updateHealth(nodes){ensureDashboard();var h=health(nodes||filtered());[['hAlive',h.alive],['hDead',h.dead],['hUntested',h.untested],['hScope',h.total]].forEach(function(x){var el=byId(x[0]);if(el)el.textContent=x[1]});var b=byId('hBars');if(b){var p=h.total?Math.round(h.alive/h.total*100):0;b.innerHTML='<div class="bar"><div>可用率</div><div class="track"><div class="fill" style="width:'+p+'%"></div></div><b>'+p+'%</b></div>';}}
-  function refine(){
-    ensureDashboard();
-    var selectGrid=byId('sv133SelectGrid')||byId('sv132SelectGrid');
-    var mainGrid=byId('sv133MainGrid')||byId('sv132MainOps');
-    var exportGrid=byId('sv133ExportGrid')||byId('sv132ExportGrid');
-    addTitle('sv135SelectTitle','选择范围',selectGrid);
-    addTitle('sv135ActionTitle','常用操作',mainGrid);
+  function sv135UpdateHealth(nodes){sv135EnsureDashboard();var h=health(nodes||filtered());[['hAlive',h.alive],['hDead',h.dead],['hUntested',h.untested],['hScope',h.total]].forEach(function(x){var el=sv135ById(x[0]);if(el)el.textContent=x[1]});var b=sv135ById('hBars');if(b){var p=h.total?Math.round(h.alive/h.total*100):0;b.innerHTML='<div class="bar"><div>可用率</div><div class="track"><div class="fill" style="width:'+p+'%"></div></div><b>'+p+'%</b></div>';}}
+  function sv135Refine(){
+    sv135EnsureDashboard();
+    var selectGrid=sv135ById('sv133SelectGrid')||sv135ById('sv132SelectGrid');
+    var mainGrid=sv135ById('sv133MainGrid')||sv135ById('sv132MainOps');
+    var exportGrid=sv135ById('sv133ExportGrid')||sv135ById('sv132ExportGrid');
+    sv135AddTitle('sv135SelectTitle','选择范围',selectGrid);
+    sv135AddTitle('sv135ActionTitle','常用操作',mainGrid);
     var firstRule=document.querySelector('.rulebox');
-    addTitle('sv135AdvancedTitle','高级设置',firstRule);
-    addTitle('sv135ExportTitle','导出与复制',exportGrid||byId('exportType'));
-    var alive=byId('alive');if(alive)alive.textContent='测活';
-    var geo=byId('geo');if(geo)geo.textContent='GeoIP补全';
-    var landing=byId('landing');if(landing)landing.textContent='落地检测';
-    var clean=byId('cleanNames');if(clean)clean.textContent='清理节点名';
-    var copyAlive=byId('copyAliveBtn');if(copyAlive)copyAlive.textContent='复制可用';
-    if(!DATA){var tb=byId('tbody');if(tb)tb.innerHTML='<tr><td colspan="6"><div class="sv135-empty">先输入订阅 URL 或粘贴订阅内容，再点击分析。<br>分析后可筛选、勾选节点，再执行测活、落地检测、清理和复制。</div></td></tr>';}
+    sv135AddTitle('sv135AdvancedTitle','高级设置',firstRule);
+    sv135AddTitle('sv135ExportTitle','导出与复制',exportGrid||sv135ById('exportType'));
+    var alive=sv135ById('alive');if(alive)alive.textContent='测活';
+    var geo=sv135ById('geo');if(geo)geo.textContent='GeoIP补全';
+    var landing=sv135ById('landing');if(landing)landing.textContent='落地检测';
+    var clean=sv135ById('cleanNames');if(clean)clean.textContent='清理节点名';
+    var copyAlive=sv135ById('copyAliveBtn');if(copyAlive)copyAlive.textContent='复制可用';
+    if(!DATA){var tb=sv135ById('tbody');if(tb)tb.innerHTML='<tr><td colspan="6"><div class="sv135-empty">先输入订阅 URL 或粘贴订阅内容，再点击分析。<br>分析后可筛选、勾选节点，再执行测活、落地检测、清理和复制。</div></td></tr>';}
   }
-  function keyOf(a){var q=(byId('q')&&byId('q').value)||'',pf=(byId('pf')&&byId('pf').value)||'',cf=(byId('cf')&&byId('cf').value)||'',u=(byId('unique')&&byId('unique').checked)?'1':'0';return [a.length,q,pf,cf,u].join('|')}
-  function row(n,i){var chk=SELECTED[n._sid]?' checked':'';return '<tr><td><input type="checkbox" class="rowchk" data-sid="'+esc(n._sid||'')+'" onchange="window.toggleSelect&&window.toggleSelect(this.dataset.sid,this.checked)"'+chk+'></td><td>'+(i+1)+'</td><td>'+esc(n.name)+'<div class="small">'+esc(meta(n))+'</div></td><td><span class="tag" title="'+esc(n.protocol)+'">'+esc(n.protocol)+'</span></td><td>'+esc(n.server)+'</td><td>'+esc(n.port)+'</td></tr>'}
-  window.sv135LoadMore=function(){viewLimit+=PAGE_SIZE;apply();};
-  var oldApply=apply;
-  apply=function(){
-    try{
-      if(!DATA){refine();return}
-      var a=filtered(),sc=selectedCount(),k=keyOf(a);if(k!==lastKey){viewLimit=PAGE_SIZE;lastKey=k}
-      var c=byId('count');if(c)c.textContent='当前显示 '+a.length+' / '+((DATA&&DATA.summary&&DATA.summary.total)||0)+' 个节点，已选 '+sc+' 个';
-      updateSelectUI();
-      var show=a.slice(0,viewLimit), html=show.map(row).join('');
-      if(a.length>show.length){html+='<tr class="sv135-more-row"><td colspan="6"><button type="button" class="btn2 sv135-more" onclick="window.sv135LoadMore&&window.sv135LoadMore();return false">继续显示 '+Math.min(PAGE_SIZE,a.length-show.length)+' 个，剩余 '+(a.length-show.length)+' 个</button></td></tr>'}
-      if(!html) html='<tr><td colspan="6" class="muted">当前筛选没有节点</td></tr>';
-      var tb=byId('tbody');if(tb)tb.innerHTML=html;
-      updateHealth(a);refine();
-    }catch(e){try{oldApply()}catch(_){ } console.log(e)}
-  };
-  var oldRender=render;
-  render=function(d){oldRender(d);ensureDashboard();updateHealth(filtered());refine();};
-  window.addEventListener('DOMContentLoaded',function(){refine();updateHealth([]);});
-})();
+  function keyOf(a){var q=(sv135ById('q')&&sv135ById('q').value)||'',pf=(sv135ById('pf')&&sv135ById('pf').value)||'',cf=(sv135ById('cf')&&sv135ById('cf').value)||'',u=(sv135ById('unique')&&sv135ById('unique').checked)?'1':'0';return [a.length,q,pf,cf,u].join('|')}
+  function row(n,i){var chk=SELECTED[n._sid]?' checked':'';return '<tr><td><input type="checkbox" class="rowchk" data-sid="'+esc(n._sid||'')+'" onchange="window.toggleSelect&&window.toggleSelect(this.dataset.sid,this.checked)"'+chk+'></td><td>'+(i+1)+'</td><td>'+esc(n.name)+'<div class="small">'+meta(n)+'</div></td><td><span class="tag" title="'+esc(n.protocol)+'">'+esc(n.protocol)+'</span></td><td>'+esc(n.server)+'</td><td>'+esc(n.port)+'</td></tr>'}
+window.sv135LoadMore=function(){sv135ViewLimit+=SV135_PAGE_SIZE;apply();};
+var _sv135BaseApply=apply;
+apply=function(){
+  try{
+    if(!DATA){sv135Refine();emit('afterApply',filtered());return}
+    var a=filtered(),sc=selectedCount(),k=keyOf(a);if(k!==sv135LastKey){sv135ViewLimit=SV135_PAGE_SIZE;sv135LastKey=k}
+    var c=sv135ById('count');if(c)c.textContent='当前显示 '+a.length+' / '+((DATA&&DATA.summary&&DATA.summary.total)||0)+' 个节点，已选 '+sc+' 个';
+    updateSelectUI();
+    var show=a.slice(0,sv135ViewLimit), html=show.map(row).join('');
+    if(a.length>show.length){html+='<tr class="sv135-more-row"><td colspan="6"><button type="button" class="btn2 sv135-more" onclick="window.sv135LoadMore&&window.sv135LoadMore();return false">继续显示 '+Math.min(SV135_PAGE_SIZE,a.length-show.length)+' 个，剩余 '+(a.length-show.length)+' 个</button></td></tr>'}
+    if(!html) html='<tr><td colspan="6" class="muted">当前筛选没有节点</td></tr>';
+    var tb=sv135ById('tbody');if(tb)tb.innerHTML=html;
+    sv135UpdateHealth(a);sv135Refine();emit('afterApply',a);
+  }catch(e){try{_sv135BaseApply()}catch(_){ } console.log(e)}
+};
+var _sv135BaseRender=render;
+render=function(d){_sv135BaseRender(d);sv135EnsureDashboard();sv135UpdateHealth(filtered());sv135Refine();};
+window.addEventListener('DOMContentLoaded',function(){sv135Refine();sv135UpdateHealth([]);});
 
-;(function(){
-  var PAGE_SIZE=120;
-  var viewLimit=PAGE_SIZE;
-  var lastKey='';
-  function byId(id){return document.getElementById(id)}
+/* ── sv136: gold theme / quickCopy / drag / autoParse ── */
+  var SV136_PAGE_SIZE=120;
+  var sv136ViewLimit=SV136_PAGE_SIZE;
+  var sv136LastKey='';
+  function sv136ById(id){return document.getElementById(id)}
   function closestCard(el){return el&&el.closest?el.closest('.card'):(el?el.parentNode:null)}
   function addMeta(name,content){
     if(document.querySelector('meta[name="'+name+'"]')) return;
     var m=document.createElement('meta');m.name=name;m.content=content;document.head.appendChild(m);
   }
-  function pulseButton(btn,okText){
+  function sv136PulseButton(btn,okText){
     if(!btn)return;
     var old=btn.textContent;
     btn.textContent=okText||'✓ SUCCESS';
@@ -593,7 +586,7 @@ window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].f
     setTimeout(function(){btn.textContent=old;btn.classList.remove('sv136-success')},1500);
   }
   function installStyle(){
-    if(byId('sv136Style'))return;
+    if(sv136ById('sv136Style'))return;
     var stl=document.createElement('style');stl.id='sv136Style';
     stl.textContent=
       'body.sv136{--bg-main:#0B0C10;--bg-card:#171921;--bg-card-2:#1E212B;--color-gold:#F1B813;--color-gold-2:#D4A00E;--color-gold-dim:rgba(241,184,19,.12);--border-color:#262938;--text-main:#fff;--text-soft:#94A3B8;--text-dim:#64748B;margin:0!important;background:radial-gradient(circle at 50% -10%,rgba(241,184,19,.12),transparent 34%),#0B0C10!important;color:var(--text-soft)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}'+
@@ -634,63 +627,111 @@ window.addEventListener('DOMContentLoaded',function(){['q','pf','cf','unique'].f
       '@media(max-width:390px){body.sv136 #cards.grid{gap:10px!important;}body.sv136 .stat{padding:15px!important;}body.sv136 .stat b{font-size:28px!important;}body.sv136 .sv133-grid,body.sv136 .sv133-grid.three,body.sv136 .sv-mini-grid,body.sv136 .sv-op-grid,body.sv136 .toolbar{grid-template-columns:repeat(2,minmax(0,1fr))!important;}body.sv136 tbody tr{grid-template-columns:34px minmax(0,1fr) 84px!important;}body.sv136 button{font-size:15px!important;padding-left:8px!important;padding-right:8px!important;}}';
     document.head.appendChild(stl);
   }
-  function addTitle(id,text,before){if(!before||byId(id))return;var t=document.createElement('div');t.id=id;t.className='sv136-section-title';t.textContent=text;before.parentNode.insertBefore(t,before)}
+  function sv136AddTitle(id,text,before){if(!before||sv136ById(id))return;var t=document.createElement('div');t.id=id;t.className='sv136-section-title';t.textContent=text;before.parentNode.insertBefore(t,before)}
   function ensureCopyQuick(){
-    var hero=document.querySelector('.hero'); if(!hero||byId('sv136QuickCopy'))return;
-    var status=byId('status'); var row=document.createElement('div'); row.className='sv136-quick-row';
+    var hero=document.querySelector('.hero'); if(!hero||sv136ById('sv136QuickCopy'))return;
+    var status=sv136ById('status'); var row=document.createElement('div'); row.className='sv136-quick-row';
     row.innerHTML='<button type="button" id="sv136QuickCopy" class="sv136-primary">一键复制干净配置</button><button type="button" id="sv136CopyAliveQuick">复制可用节点</button>';
     hero.insertBefore(row,status||null);
-    byId('sv136QuickCopy').onclick=function(){if(window.copyExport)window.copyExport();var b=this;setTimeout(function(){var txt=(byId('status')&&byId('status').textContent)||'';if(txt.indexOf('已复制')>=0)pulseButton(b)},120)};
-    byId('sv136CopyAliveQuick').onclick=function(){if(window.copyAliveExport)window.copyAliveExport();var b=this;setTimeout(function(){var txt=(byId('status')&&byId('status').textContent)||'';if(txt.indexOf('已复制')>=0)pulseButton(b)},120)};
+    sv136ById('sv136QuickCopy').onclick=function(){if(window.copyExport)window.copyExport();var b=this;setTimeout(function(){var txt=(sv136ById('status')&&sv136ById('status').textContent)||'';if(txt.indexOf('已复制')>=0)sv136PulseButton(b)},120)};
+    sv136ById('sv136CopyAliveQuick').onclick=function(){if(window.copyAliveExport)window.copyAliveExport();var b=this;setTimeout(function(){var txt=(sv136ById('status')&&sv136ById('status').textContent)||'';if(txt.indexOf('已复制')>=0)sv136PulseButton(b)},120)};
   }
-  function ensureDashboard(){
-    document.body.classList.add('sv136');installStyle();ensureCopyQuick();
+  function sv136EnsureDashboard(){
+    document.body.classList.add('sv136');installStyles();ensureCopyQuick();
     addMeta('apple-mobile-web-app-capable','yes');addMeta('apple-mobile-web-app-status-bar-style','black-translucent');addMeta('apple-mobile-web-app-title','SubViz');
-    var p=closestCard(byId('protocols')),c=closestCard(byId('countries'));
-    if(p&&c&&!byId('sv135Charts')){var grid=document.createElement('div');grid.id='sv135Charts';grid.className='sv135-chart-grid';p.parentNode.insertBefore(grid,p);grid.appendChild(p);grid.appendChild(c);var h=document.createElement('div');h.id='sv135Health';h.className='card';h.innerHTML='<h2>节点健康状况</h2><div class="health-grid"><div class="health-cell"><span>可用</span><b id="hAlive">0</b></div><div class="health-cell"><span>不可用</span><b id="hDead">0</b></div><div class="health-cell"><span>未测</span><b id="hUntested">0</b></div><div class="health-cell"><span>当前筛选</span><b id="hScope">0</b></div></div><div id="hBars" class="small muted">测活后这里会显示可用比例。</div>';grid.appendChild(h)}
+    var p=closestCard(sv136ById('protocols')),c=closestCard(sv136ById('countries'));
+    if(p&&c&&!sv136ById('sv135Charts')){var grid=document.createElement('div');grid.id='sv135Charts';grid.className='sv135-chart-grid';p.parentNode.insertBefore(grid,p);grid.appendChild(p);grid.appendChild(c);var h=document.createElement('div');h.id='sv135Health';h.className='card';h.innerHTML='<h2>节点健康状况</h2><div class="health-grid"><div class="health-cell"><span>可用</span><b id="hAlive">0</b></div><div class="health-cell"><span>不可用</span><b id="hDead">0</b></div><div class="health-cell"><span>未测</span><b id="hUntested">0</b></div><div class="health-cell"><span>当前筛选</span><b id="hScope">0</b></div></div><div id="hBars" class="small muted">测活后这里会显示可用比例。</div>';grid.appendChild(h)}
   }
   function health(nodes){var a=0,d=0,u=0;(nodes||[]).forEach(function(n){if(n.aliveOK===true)a++;else if(n.aliveOK===false)d++;else u++});return{alive:a,dead:d,untested:u,total:(nodes||[]).length}}
-  function updateHealth(nodes){ensureDashboard();var h=health(nodes||[]);[['hAlive',h.alive],['hDead',h.dead],['hUntested',h.untested],['hScope',h.total]].forEach(function(x){var el=byId(x[0]);if(el)el.textContent=x[1]});var b=byId('hBars');if(b){var p=h.total?Math.round(h.alive/h.total*100):0;b.innerHTML='<div class="bar"><div>可用率</div><div class="track"><div class="fill" style="width:'+p+'%"></div></div><b>'+p+'%</b></div>'}}
-  function refine(){
-    ensureDashboard();
-    addTitle('sv136SelectTitle','选择范围',byId('sv133SelectGrid')||byId('sv132SelectGrid'));
-    addTitle('sv136ActionTitle','常用操作',byId('sv133MainGrid')||byId('sv132MainOps'));
-    addTitle('sv136AdvancedTitle','高级设置',document.querySelector('.rulebox'));
-    addTitle('sv136ExportTitle','导出与复制',byId('sv133ExportGrid')||byId('sv132ExportGrid')||byId('exportType'));
-    var alive=byId('alive');if(alive)alive.textContent='测活';
-    var geo=byId('geo');if(geo)geo.textContent='GeoIP 补全';
-    var landing=byId('landing');if(landing)landing.textContent='落地检测';
-    var clean=byId('cleanNames');if(clean)clean.textContent='清理节点名';
-    var copyAlive=byId('copyAliveBtn');if(copyAlive)copyAlive.textContent='复制可用';
-    if(!DATA){var tb=byId('tbody');if(tb)tb.innerHTML='<tr><td colspan="6"><div class="sv136-empty">先输入订阅 URL，或直接粘贴 / 拖入订阅内容。<br>分析后可筛选、勾选节点，再执行测活、落地检测、清理和复制。</div></td></tr>'}
+  function sv136UpdateHealth(nodes){sv136EnsureDashboard();var h=health(nodes||[]);[['hAlive',h.alive],['hDead',h.dead],['hUntested',h.untested],['hScope',h.total]].forEach(function(x){var el=sv136ById(x[0]);if(el)el.textContent=x[1]});var b=sv136ById('hBars');if(b){var p=h.total?Math.round(h.alive/h.total*100):0;b.innerHTML='<div class="bar"><div>可用率</div><div class="track"><div class="fill" style="width:'+p+'%"></div></div><b>'+p+'%</b></div>'}}
+  function sv136Refine(){
+    sv136EnsureDashboard();
+    sv136AddTitle('sv136SelectTitle','选择范围',sv136ById('sv133SelectGrid')||sv136ById('sv132SelectGrid'));
+    sv136AddTitle('sv136ActionTitle','常用操作',sv136ById('sv133MainGrid')||sv136ById('sv132MainOps'));
+    sv136AddTitle('sv136AdvancedTitle','高级设置',document.querySelector('.rulebox'));
+    sv136AddTitle('sv136ExportTitle','导出与复制',sv136ById('sv133ExportGrid')||sv136ById('sv132ExportGrid')||sv136ById('exportType'));
+    var alive=sv136ById('alive');if(alive)alive.textContent='测活';
+    var geo=sv136ById('geo');if(geo)geo.textContent='GeoIP 补全';
+    var landing=sv136ById('landing');if(landing)landing.textContent='落地检测';
+    var clean=sv136ById('cleanNames');if(clean)clean.textContent='清理节点名';
+    var copyAlive=sv136ById('copyAliveBtn');if(copyAlive)copyAlive.textContent='复制可用';
+    if(!DATA){var tb=sv136ById('tbody');if(tb)tb.innerHTML='<tr><td colspan="6"><div class="sv136-empty">先输入订阅 URL，或直接粘贴 / 拖入订阅内容。<br>分析后可筛选、勾选节点，再执行测活、落地检测、清理和复制。</div></td></tr>'}
   }
-  function keyOf(a){var q=(byId('q')&&byId('q').value)||'',pf=(byId('pf')&&byId('pf').value)||'',cf=(byId('cf')&&byId('cf').value)||'',u=(byId('unique')&&byId('unique').checked)?'1':'0';return [a.length,q,pf,cf,u].join('|')}
-  function row(n,i){var chk=SELECTED[n._sid]?' checked':'';return '<tr><td><input type="checkbox" class="rowchk" data-sid="'+esc(n._sid||'')+'" onchange="window.toggleSelect&&window.toggleSelect(this.dataset.sid,this.checked)"'+chk+'></td><td>'+(i+1)+'</td><td>'+esc(n.name)+'<div class="small">'+esc(meta(n))+'</div></td><td><span class="tag" title="'+esc(n.protocol)+'">'+esc(n.protocol)+'</span></td><td class="sv136-server" title="'+esc(n.server||'')+'">'+esc(n.server)+'</td><td class="sv136-port">'+esc(n.port)+'</td></tr>'}
-  window.sv136LoadMore=function(){viewLimit+=PAGE_SIZE;apply()};
-  var oldApply=apply;
-  apply=function(){
-    try{
-      if(!DATA){refine();updateHealth([]);return}
-      var a=filtered(),sc=selectedCount(),k=keyOf(a);if(k!==lastKey){viewLimit=PAGE_SIZE;lastKey=k}
-      var c=byId('count');if(c)c.textContent='当前显示 '+a.length+' / '+((DATA&&DATA.summary&&DATA.summary.total)||0)+' 个节点，已选 '+sc+' 个';
-      updateSelectUI();
-      var show=a.slice(0,viewLimit),html=show.map(row).join('');
-      if(a.length>show.length){html+='<tr class="sv136-more-row"><td colspan="6"><button type="button" class="btn2 sv136-more" onclick="window.sv136LoadMore&&window.sv136LoadMore();return false">继续显示 '+Math.min(PAGE_SIZE,a.length-show.length)+' 个，剩余 '+(a.length-show.length)+' 个</button></td></tr>'}
-      if(!html)html='<tr><td colspan="6" class="muted">当前筛选没有节点</td></tr>';
-      var tb=byId('tbody');if(tb)tb.innerHTML=html;
-      updateHealth(a);refine();
-    }catch(e){try{oldApply()}catch(_){ }console.log(e)}
-  };
-  var oldRender=render;
-  render=function(d){oldRender(d);ensureDashboard();updateHealth(filtered());refine()};
-  function autoAnalyzeText(){var raw=byId('raw');if(!raw)return;var t=String(raw.value||'').trim();if(t.length<20)return;if(/^(https?:\/\/\S+)$/i.test(t)){var u=byId('url');if(u){u.value=t;analyzeURL();return}}analyzeText()}
-  function installAutoParse(){
-    var raw=byId('raw'),url=byId('url'),hero=document.querySelector('.hero');
-    if(url&&!url._sv136Paste){url._sv136Paste=1;url.addEventListener('paste',function(){setTimeout(function(){var v=String(url.value||'').trim();if(/^https?:\/\//i.test(v))analyzeURL()},80)});url.addEventListener('drop',function(e){try{e.preventDefault();var txt=e.dataTransfer.getData('text');if(txt){url.value=txt.trim();if(/^https?:\/\//i.test(url.value))analyzeURL()}}catch(_){}})}
-    if(raw&&!raw._sv136Paste){raw._sv136Paste=1;raw.addEventListener('paste',function(){setTimeout(autoAnalyzeText,120)});raw.addEventListener('drop',function(e){try{e.preventDefault();var f=e.dataTransfer.files&&e.dataTransfer.files[0];if(f){var r=new FileReader();r.onload=function(){raw.value=String(r.result||'');autoAnalyzeText()};r.readAsText(f);return}var txt=e.dataTransfer.getData('text');if(txt){raw.value=txt;autoAnalyzeText()}}catch(err){st('拖拽读取失败：'+(err.message||err))}})}
-    if(hero&&!hero._sv136Drop){hero._sv136Drop=1;['dragenter','dragover'].forEach(function(ev){hero.addEventListener(ev,function(e){e.preventDefault();hero.classList.add('sv136-dragging')})});['dragleave','drop'].forEach(function(ev){hero.addEventListener(ev,function(){hero.classList.remove('sv136-dragging')})})}
+  function keyOf(a){var q=(sv136ById('q')&&sv136ById('q').value)||'',pf=(sv136ById('pf')&&sv136ById('pf').value)||'',cf=(sv136ById('cf')&&sv136ById('cf').value)||'',u=(sv136ById('unique')&&sv136ById('unique').checked)?'1':'0';return [a.length,q,pf,cf,u].join('|')}
+  function row(n,i){var chk=SELECTED[n._sid]?' checked':'';return '<tr><td><input type="checkbox" class="rowchk" data-sid="'+esc(n._sid||'')+'" onchange="window.toggleSelect&&window.toggleSelect(this.dataset.sid,this.checked)"'+chk+'></td><td>'+(i+1)+'</td><td>'+esc(n.name)+'<div class="small">'+meta(n)+'</div></td><td><span class="tag" title="'+esc(n.protocol)+'">'+esc(n.protocol)+'</span></td><td class="sv136-server" title="'+esc(n.server||'')+'">'+esc(n.server)+'</td><td class="sv136-port">'+esc(n.port)+'</td></tr>'}
+  window.sv136LoadMore=function(){sv136ViewLimit+=SV136_PAGE_SIZE;apply()};
+var _sv136BaseApply=apply;
+apply=function(){
+  try{
+    if(!DATA){sv136Refine();sv136UpdateHealth([]);emit('afterApply',filtered());return}
+    var a=filtered(),sc=selectedCount(),k=keyOf(a);if(k!==sv136LastKey){sv136ViewLimit=SV136_PAGE_SIZE;sv136LastKey=k}
+    var c=sv136ById('count');if(c)c.textContent='当前显示 '+a.length+' / '+((DATA&&DATA.summary&&DATA.summary.total)||0)+' 个节点，已选 '+sc+' 个';
+    updateSelectUI();
+    var show=a.slice(0,sv136ViewLimit),html=show.map(row).join('');
+    if(a.length>show.length){html+='<tr class="sv136-more-row"><td colspan="6"><button type="button" class="btn2 sv136-more" onclick="window.sv136LoadMore&&window.sv136LoadMore();return false">继续显示 '+Math.min(SV136_PAGE_SIZE,a.length-show.length)+' 个，剩余 '+(a.length-show.length)+' 个</button></td></tr>'}
+    if(!html)html='<tr><td colspan="6" class="muted">当前筛选没有节点</td></tr>';
+    var tb=sv136ById('tbody');if(tb)tb.innerHTML=html;
+    sv136UpdateHealth(a);sv136Refine();emit('afterApply',a);
+  }catch(e){try{_sv136BaseApply()}catch(_){ }console.log(e)}
+};
+var _sv136BaseRender=render;
+render=function(d){_sv136BaseRender(d);sv136EnsureDashboard();sv136UpdateHealth(filtered());sv136Refine()};
+function sv136AutoAnalyzeText(){var raw=sv136ById('raw');if(!raw)return;var t=String(raw.value||'').trim();if(t.length<20)return;if(/^(https?:\/\/\S+)$/i.test(t)){var u=sv136ById('url');if(u){u.value=t;analyzeURL();return}}analyzeText()}
+function sv136InstallAutoParse(){
+  var raw=sv136ById('raw'),url=sv136ById('url'),hero=document.querySelector('.hero');
+  if(url&&!url._sv136Paste){url._sv136Paste=1;url.addEventListener('paste',function(){setTimeout(function(){var v=String(url.value||'').trim();if(/^https?:\/\//i.test(v))analyzeURL()},80)});url.addEventListener('drop',function(e){try{e.preventDefault();var txt=e.dataTransfer.getData('text');if(txt){url.value=txt.trim();if(/^https?:\/\//i.test(url.value))analyzeURL()}}catch(_){}})}
+  if(raw&&!raw._sv136Paste){raw._sv136Paste=1;raw.addEventListener('paste',function(){setTimeout(sv136AutoAnalyzeText,120)});raw.addEventListener('drop',function(e){try{e.preventDefault();var f=e.dataTransfer.files&&e.dataTransfer.files[0];if(f){var r=new FileReader();r.onload=function(){raw.value=String(r.result||'');sv136AutoAnalyzeText()};r.readAsText(f);return}var txt=e.dataTransfer.getData('text');if(txt){raw.value=txt;sv136AutoAnalyzeText()}}catch(err){st('拖拽读取失败：'+(err.message||err))}})}
+  if(hero&&!hero._sv136Drop){hero._sv136Drop=1;['dragenter','dragover'].forEach(function(ev){hero.addEventListener(ev,function(e){e.preventDefault();hero.classList.add('sv136-dragging')})});['dragleave','drop'].forEach(function(ev){hero.addEventListener(ev,function(){hero.classList.remove('sv136-dragging')})})}
+}
+hook('afterApply', function(){ var b=sv136ById('copyBtn'); if(b){var txt=(sv136ById('status')&&sv136ById('status').textContent)||''; if(txt.indexOf('已复制')>=0)sv136PulseButton(b)} });
+window.addEventListener('DOMContentLoaded',function(){sv136EnsureDashboard();sv136InstallAutoParse();sv136Refine();sv136UpdateHealth(DATA?filtered():[])});
+
+/* ── Gist: token / upload panel ── */
+function gistById(id){return document.getElementById(id)}
+function gistVal(id){var el=gistById(id);return el?String(el.value||'').trim():''}
+function gistChecked(id){var el=gistById(id);return !!(el&&el.checked)}
+function gistDefaultFile(){var t=gistById('exportType')?gistById('exportType').value:'clash';if(t==='json')return 'subviz-backup.json';if(t==='uri')return 'subscription.txt';if(t==='uri64')return 'subscription-base64.txt';return 'mihomo.yaml'}
+function gistSetTokenStatus(has, text){var el=gistById('gistTokenStatus');if(el)el.textContent=text||(has?'已保存 Token':'未保存 Token')}
+function gistPost(path, body){return loadJSON(path+'?t='+Date.now(),{method:'POST',body:JSON.stringify(body||{}),headers:{'Content-Type':'application/json;charset=utf-8'}})}
+function gistRefreshStatus(){return loadJSON('/api/gist-token/status?t='+Date.now()).then(function(r){gistSetTokenStatus(!!(r&&r.hasToken), r&&r.hasToken?'已保存 Token':'未保存 Token');return r}).catch(function(e){gistSetTokenStatus(false,'Token 状态读取失败');throw e})}
+function gistEnsurePanel(){
+    if(gistById('svGistBox')) return;
+    var table=document.querySelector('table');
+    var anchor=gistById('sv133ExportGrid')||gistById('sv132ExportGrid')||document.querySelector('.exportbar')||table;
+    if(!anchor||!anchor.parentNode) return;
+    var box=document.createElement('div');
+    box.id='svGistBox';
+    box.className='rulebox sv-gist-box';
+    box.innerHTML='<details><summary>上传到 Gist / 发布远程订阅</summary>'+ 
+      '<div class="toolhint">上传范围与当前导出一致：只上传已勾选节点。Token 保存在 Surge 持久存储，前端只显示是否已保存，不回显明文。</div>'+ 
+      '<div class="rulegrid">'+
+      '<div><div class="small">Token 状态</div><input id="gistTokenStatus" value="读取中…" readonly></div>'+ 
+      '<div><div class="small">GitHub Token（留空则使用已保存 Token）</div><input id="gistToken" type="password" placeholder="github_pat_xxx / ghp_xxx"></div>'+ 
+      '<div><div class="small">Gist 名称 / 描述</div><input id="gistName" value="subviz-share"></div>'+ 
+      '<div><div class="small">文件名</div><input id="gistFilename" value="'+gistDefaultFile()+'"></div>'+ 
+      '<div><div class="small">指定 Gist ID（可选；留空则按 Gist 名称查找/创建）</div><input id="gistId" placeholder="可选：已有 Gist ID"></div>'+ 
+      '<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:30px"><input id="gistPublic" type="checkbox" style="width:22px;height:22px"> 创建公开 Gist（默认 Secret Gist）</label>'+ 
+      '</div>'+ 
+      '<div class="rulebtns" style="margin-top:10px"><button type="button" id="gistSaveToken" class="btn2">保存/更新 Token</button><button type="button" id="gistTestToken" class="btn2">测试 Token</button></div>'+ 
+      '<div class="rulebtns" style="margin-top:10px"><button type="button" id="gistClearToken" class="btn2">清除已保存 Token</button><button type="button" id="gistUpload" class="btn2">上传当前导出到 Gist</button></div>'+ 
+      '<div class="rulegrid" style="margin-top:10px"><div><div class="small">Raw URL</div><input id="gistRawUrl" readonly placeholder="上传成功后显示可订阅 raw_url"></div><div><div class="small">Gist 页面</div><input id="gistPageUrl" readonly placeholder="上传成功后显示 Gist 页面地址"></div></div>'+ 
+      '<button type="button" id="gistCopyRaw" class="btn2">复制 Raw URL</button>'+ 
+      '<div class="toolhint">提醒：Gist 内容就是代理订阅，包含节点密码/UUID/SNI/Host/path 等敏感信息。Secret Gist 不是加密，只是不会公开列出，拿到链接的人仍可访问。</div>'+ 
+      '</details>';
+    if(table&&table.parentNode===anchor.parentNode) anchor.parentNode.insertBefore(box, table); else anchor.parentNode.insertBefore(box, anchor.nextSibling);
+    bindGistPanel();
+    gistRefreshStatus().catch(function(){});
   }
-  var oldCopyExport=window.copyExport;
-  if(oldCopyExport&&!window._sv136CopyWrapped){window._sv136CopyWrapped=1;window.copyExport=function(){oldCopyExport.apply(this,arguments);var b=byId('copyBtn');setTimeout(function(){var txt=(byId('status')&&byId('status').textContent)||'';if(txt.indexOf('已复制')>=0)pulseButton(b)},150)}}
-  window.addEventListener('DOMContentLoaded',function(){ensureDashboard();installAutoParse();refine();updateHealth(DATA?filtered():[])});
-})();
+  function bindGistPanel(){
+    var exportType=gistById('exportType'), file=gistById('gistFilename');
+    if(exportType&&file&&!file._svGistBound){file._svGistBound=1;exportType.addEventListener('change',function(){if(!String(file.value||'').trim()||/^(mihomo\.yaml|subscription\.txt|subscription-base64\.txt|subviz-backup\.json)$/.test(String(file.value||'')))file.value=gistDefaultFile()})}
+    var save=gistById('gistSaveToken');if(save&&!save._svGistBound){save._svGistBound=1;save.onclick=function(){var token=gistVal('gistToken');if(!token){st('请先粘贴新的 GitHub Token');return}st('正在保存 GitHub Token 到 Surge…');gistPost('/api/gist-token/save',{token:token}).then(function(r){if(!r.ok)throw new Error(r.error||'保存失败');gistById('gistToken').value='';gistSetTokenStatus(true);st('Token 已保存/更新到 Surge。以后上传时可留空 Token。')}).catch(function(e){st('保存 Token 失败：'+(e.message||e))})}}
+    var clear=gistById('gistClearToken');if(clear&&!clear._svGistBound){clear._svGistBound=1;clear.onclick=function(){st('正在清除已保存 Token…');gistPost('/api/gist-token/delete',{}).then(function(r){if(!r.ok)throw new Error(r.error||'清除失败');gistSetTokenStatus(false);st('已清除 Surge 中保存的 GitHub Token')}).catch(function(e){st('清除 Token 失败：'+(e.message||e))})}}
+    var test=gistById('gistTestToken');if(test&&!test._svGistBound){test._svGistBound=1;test.onclick=function(){st('正在测试 GitHub Token…');gistPost('/api/gist-token/test',{token:gistVal('gistToken')}).then(function(r){if(!r.ok)throw new Error(r.error||'测试失败');st('Token 测试通过：可以访问 Gist API')}).catch(function(e){st('Token 测试失败：'+(e.message||e))})}}
+    var upload=gistById('gistUpload');if(upload&&!upload._svGistBound){upload._svGistBound=1;upload.onclick=function(){try{var p=buildExportPayload();var name=gistVal('gistName'),filename=gistVal('gistFilename')||gistDefaultFile();if(!name&&!gistVal('gistId')){st('请填写 Gist 名称，或指定 Gist ID');return}if(!filename){st('请填写文件名');return}st('正在上传 '+p.label+' 到 Gist：'+p.count+' 个节点…');gistPost('/api/gist-upload',{token:gistVal('gistToken'),gistName:name,filename:filename,gistId:gistVal('gistId'),public:gistChecked('gistPublic'),format:gistById('exportType')?gistById('exportType').value:'clash',content:p.text}).then(function(r){if(!r.ok)throw new Error(r.error||'上传失败');if(gistById('gistRawUrl'))gistById('gistRawUrl').value=r.rawUrl||'';if(gistById('gistPageUrl'))gistById('gistPageUrl').value=r.url||'';st('Gist '+(r.action==='updated'?'已更新':'已创建')+'：'+(r.rawUrl||r.url||''));}).catch(function(e){st('上传 Gist 失败：'+(e.message||e))})}catch(e){st('上传 Gist 失败：'+(e.message||e))}}}
+    var copy=gistById('gistCopyRaw');if(copy&&!copy._svGistBound){copy._svGistBound=1;copy.onclick=function(){var u=gistVal('gistRawUrl');if(!u){st('还没有 Raw URL，请先上传成功后再复制');return}function ok(){st('已复制 Raw URL')}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(ok).catch(function(){if(fallbackCopy(u))ok();else st('复制 Raw URL 失败')})}else{if(fallbackCopy(u))ok();else st('复制 Raw URL 失败')}}}
+}
+window.svGistRefreshStatus=gistRefreshStatus;
+window.svGistEnsurePanel=gistEnsurePanel;
+hook('afterApply', function(){ gistEnsurePanel() });
+window.addEventListener('DOMContentLoaded',function(){gistEnsurePanel()});

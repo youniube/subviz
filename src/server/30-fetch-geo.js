@@ -15,13 +15,7 @@
     });
   }
   function sampleText() {
-    return 'proxies:\n' +
-      '  - name: "\ud83c\uddf8\ud83c\uddecSG_1|demo"\n    type: trojan\n    server: ppg-sg.example.com\n    port: 443\n    password: demo-password\n    network: ws\n    tls: true\n    ws-opts:\n      path: /demo\n      headers:\n        Host: cdn.example.com\n' +
-      '  - name: "\ud83c\uddfa\ud83c\uddf8US_1|reality-demo"\n    type: vless\n    server: reality.example.com\n    port: 443\n    uuid: 00000000-0000-0000-0000-000000000000\n    tls: true\n    flow: xtls-rprx-vision\n    servername: www.microsoft.com\n    client-fingerprint: chrome\n    reality-opts:\n      public-key: demo-public-key\n      short-id: demoid\n' +
-      '  - name: "SE_1 demo"\n    type: ss\n    server: 1.2.3.4\n    port: 8388\n    cipher: aes-128-gcm\n    password: demo-password\n' +
-      '  - name: "JP hy2 demo"\n    type: hysteria2\n    server: hy2.example.com\n    port: 443\n    password: demo-password\n    sni: hy2.example.com\n    obfs: salamander\n    obfs-password: demo-obfs\n' +
-      '  - { name: "HK tuic demo", type: tuic, server: tuic.example.com, port: 443, uuid: 00000000-0000-0000-0000-000000000001, password: demo-password, sni: tuic.example.com, alpn: [h3] }\n' +
-      '  - { name: "DE grpc demo", type: vmess, server: grpc.example.com, port: 443, uuid: 00000000-0000-0000-0000-000000000002, tls: true, network: grpc, grpc-opts: { grpc-service-name: demoService } }\n';
+    return '%%SAMPLE_YAML%%';
   }
 
   function normalizeGeoResult(obj, provider, host) {
@@ -83,16 +77,16 @@
       query = clean(obj.ip || obj.query || host || '');
     }
     if (!ok || !code) return null;
-    var ci = COUNTRY[code] ? countryInfo(code, 'geoip', 78) : { countryCode: code, country: country || code, countrySource: 'geoip', countryConfidence: 70 };
-    return { ok: true, host: host, query: query, countryCode: code, country: ci.country || country || code, countrySource: 'geoip', countryConfidence: ci.countryConfidence || 78, provider: provider, city: city, region: region, isp: isp, org: org, asn: asn };
+    var ci = COUNTRY[code] ? countryInfo(code, 'geoip', CONFIDENCE_GEOIP) : { countryCode: code, country: country || code, countrySource: 'geoip', countryConfidence: CONFIDENCE_GEOIP_WEAK };
+    return { ok: true, host: host, query: query, countryCode: code, country: ci.country || country || code, countrySource: 'geoip', countryConfidence: ci.countryConfidence || CONFIDENCE_GEOIP, provider: provider, city: city, region: region, isp: isp, org: org, asn: asn };
   }
   function fallbackGeoLookup(host, reason) {
-    var u = 'https://ipwho.is/' + encodeURIComponent(host) + '?lang=zh-CN';
+    var u = 'http://ip-api.com/json/' + encodeURIComponent(host) + '?lang=zh-CN&fields=status,message,country,countryCode,regionName,city,isp,org,as,query';
     $httpClient.get({ url: u, timeout: 12, headers: { 'User-Agent': 'SubViz/' + VERSION } }, function (err, resp, data) {
       if (err) return respondJSON({ ok:false, host: host, error: String(err), fallbackReason: reason || '' }, 502);
       try {
         var obj = JSON.parse(data || '{}');
-        var r = normalizeGeoResult(obj, 'ipwho.is', host);
+        var r = normalizeGeoResult(obj, 'ip-api', host);
         if (!r) return respondJSON({ ok:false, host: host, error: obj.message || 'geoip lookup failed', fallbackReason: reason || '' }, 502);
         return respondJSON(r);
       } catch (e) { return respondJSON({ ok:false, host: host, error: String(e), fallbackReason: reason || '' }, 500); }
@@ -101,13 +95,13 @@
   function geoLookup(host) {
     host = clean(host || '').replace(/^\[/, '').replace(/\]$/, '');
     if (!host) return respondJSON({ ok:false, error:'missing host' }, 400);
-    var u = 'http://ip-api.com/json/' + encodeURIComponent(host) + '?lang=zh-CN&fields=status,message,country,countryCode,regionName,city,isp,org,as,query';
+    var u = 'https://ipwho.is/' + encodeURIComponent(host) + '?lang=zh-CN';
     $httpClient.get({ url: u, timeout: 12, headers: { 'User-Agent': 'SubViz/' + VERSION } }, function (err, resp, data) {
       if (err) return fallbackGeoLookup(host, String(err));
       try {
         var obj = JSON.parse(data || '{}');
-        var r = normalizeGeoResult(obj, 'ip-api', host);
-        if (!r) return fallbackGeoLookup(host, obj.message || 'ip-api failed');
+        var r = normalizeGeoResult(obj, 'ipwho.is', host);
+        if (!r) return fallbackGeoLookup(host, obj.message || 'ipwho.is failed');
         return respondJSON(r);
       } catch (e) { return fallbackGeoLookup(host, String(e)); }
     });

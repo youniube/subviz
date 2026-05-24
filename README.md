@@ -24,6 +24,7 @@
   - 通用 URI 订阅
   - Base64 URI 订阅
   - JSON 备份
+- 支持上传当前导出到 GitHub Gist，并可将 GitHub Token 保存到 Surge 持久存储
 
 ---
 
@@ -41,10 +42,10 @@ https://raw.githubusercontent.com/youniube/subviz/main/subviz.sgmodule
 http://subviz.store/
 ```
 
-如果页面没有刷新到最新版，可以加版本参数：
+如果页面没有刷新到最新版，可以加版本参数（数字随意改一个新值即可绕过缓存）：
 
 ```text
-http://subviz.store/?v=141
+http://subviz.store/?v=any
 ```
 
 健康检查：
@@ -59,7 +60,7 @@ http://subviz.store/api/health
 {
   "ok": true,
   "name": "SubViz Surge",
-  "version": "0.1.41"
+  "version": "0.1.43"
 }
 ```
 
@@ -215,6 +216,49 @@ vmess://...
 
 ---
 
+## 上传到 Gist
+
+在导出区域展开：
+
+```text
+上传到 Gist / 发布远程订阅
+```
+
+建议流程：
+
+```text
+拉取分析
+→ 筛选 / 全选当前 / 清理节点名
+→ 选择导出格式，例如 Clash YAML
+→ 填写 Gist 名称和文件名
+→ 上传当前导出到 Gist
+→ 复制 Raw URL 给 Clash Verge / Mihomo / OpenClash 等客户端订阅
+```
+
+GitHub Token 可以保存到 Surge 的 `$persistentStore`：
+
+```text
+粘贴 GitHub Token
+→ 保存/更新 Token
+→ 以后上传时 Token 输入框可以留空
+```
+
+更换 Token 时，直接粘贴新的 Token 再点“保存/更新 Token”即可覆盖旧 Token。
+
+也可以点击：
+
+```text
+测试 Token
+清除已保存 Token
+```
+
+说明：
+
+- Gist 名称对应 Gist description。上传时会先查找 description 完全相同的 Gist，找到则更新，找不到则创建。
+- 文件名必填，避免误改已有 Gist 文件。
+- 默认创建 Secret Gist；Secret Gist 不是加密，只是不会公开列出，拿到 Raw URL 的人仍然可以访问。
+- 上传内容是实际订阅内容，包含节点密码、UUID、SNI、Host、path 等敏感信息，不建议公开分享。
+
 
 ## 推荐流程
 
@@ -257,10 +301,10 @@ http://subviz.store/api/health
 
 ### 点击按钮没反应
 
-尝试：
+尝试在 URL 后加任意新参数绕过缓存：
 
 ```text
-http://subviz.store/?v=141
+http://subviz.store/?v=any
 ```
 
 或在 Surge 外部资源里更新脚本。
@@ -295,8 +339,27 @@ CDN、中转、伪装域名场景下，落地检测更接近真实情况。
 ## 当前版本
 
 ```text
-v0.1.41
+v0.1.43
 ```
+
+## v0.1.43 修复内容
+
+- 新增“上传到 Gist / 发布远程订阅”面板，可把当前已勾选节点按当前导出格式上传到 GitHub Gist。
+- 新增 Surge `$persistentStore` Token 管理：支持保存/更新、测试、清除 GitHub Token；上传时 Token 输入框留空会自动使用已保存 Token。
+- 新增 `/api/gist-upload`、`/api/gist-token/status`、`/api/gist-token/save`、`/api/gist-token/test`、`/api/gist-token/delete`。
+- 上传时按 Gist description 精确查找同名 Gist，找到则更新，找不到则创建；也支持手动填写 Gist ID 强制更新指定 Gist。
+- 上传成功后返回 Gist 页面 URL 和稳定 Raw URL，并支持一键复制 Raw URL。
+- 新增 `tools/gist-test.js`，覆盖 Token 存储、Gist 创建、Gist 更新和 Raw URL 规范化的回归测试。
+- 远程订阅拉取策略不变，仍保持不限制 URL。
+
+## v0.1.42 修复内容
+
+- 第四轮 QA 收尾：新增 `test/fixtures/` 样本库，覆盖 Clash YAML、URI、Surge `[Proxy]`、Base64 订阅和重复节点场景。
+- 新增 `tools/fixture-test.js`，自动验证多协议解析数量、协议覆盖、重复节点统计、Reality 字段展平、gRPC/WS 嵌套字段保真。
+- 新增 `tools/client-export-test.js`，自动验证 Clash YAML 导出不会把 `ws-opts` / `grpc-opts` / `reality-opts` 错误转成 JSON 字符串，并验证 Reality / Hysteria2 / TUIC / Snell / AnyTLS 的 URI 导出。
+- `npm test` 现在会依次执行 smoke test、fixture regression test、client export test，便于后续每次改动前先跑回归。
+- 补充导出安全提示：JSON 备份会包含节点密钥、UUID、密码、SNI、Host、path 等敏感信息，不建议公开分享。
+- 没有改变远程订阅拉取限制策略，仍保持不限制 URL。
 
 ## v0.1.41 修复内容
 

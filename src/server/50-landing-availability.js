@@ -20,13 +20,16 @@
       'https://api.myip.com'
     ];
   }
-  function landingTimeoutSeconds() {
-    var n = Number(getQuery(getURL(), 'timeout') || 5000);
-    if (!n || n < 1) n = 5000;
-    if (n >= 1000) n = n / 1000;
+  function timeoutToSeconds(raw, defaultMs) {
+    var n = Number(raw || defaultMs);
+    if (!n || n < 1) n = defaultMs;
+    if (n >= 200) n = n / 1000;
     if (n < 2) n = 2;
     if (n > 30) n = 30;
     return n;
+  }
+  function landingTimeoutSeconds() {
+    return timeoutToSeconds(getQuery(getURL(), 'timeout'), 5000);
   }
   function getBodyIP(data) {
     var t = clean(String(data || ''));
@@ -161,9 +164,7 @@
     if (!built.ok) return respondJSON({ ok:false, alive:false, error: built.error || '当前协议不支持测活', errorCode: built.errorCode || 'descriptor_failed', protocol: built.protocol || node.protocol }, 400);
     var url = getQuery(getURL(), 'url') || 'http://connectivitycheck.platform.hicloud.com/generate_204';
     var statusExpr = getQuery(getURL(), 'status') || '204';
-    var timeout = Number(getQuery(getURL(), 'timeout') || 3000);
-    if (!timeout || timeout < 200) timeout = 3000;
-    if (timeout > 30000) timeout = 30000;
+    var timeout = timeoutToSeconds(getQuery(getURL(), 'timeout'), 3000);
     var retries = Math.max(0, Math.min(3, parseInt(getQuery(getURL(), 'retries') || '1', 10) || 0));
     var retryDelay = Math.max(0, Math.min(5000, parseInt(getQuery(getURL(), 'retry_delay') || '1000', 10) || 0));
     var startedAll = Date.now();
@@ -175,7 +176,7 @@
       attempts++;
       var started = Date.now();
       var descUse = descriptors[descIndex];
-      var opt = { url: url, timeout: timeout/1000, insecure: true, headers: { 'User-Agent': 'SubViz/' + VERSION }, 'policy-descriptor': descUse, node: descUse };
+      var opt = { url: url, timeout: timeout, insecure: true, headers: { 'User-Agent': 'SubViz/' + VERSION }, 'policy-descriptor': descUse, node: descUse };
       $httpClient.get(opt, function (err, resp, data) {
         var latency = Date.now() - started;
         var totalLatency = Date.now() - startedAll;

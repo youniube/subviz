@@ -1,5 +1,5 @@
-  var VERSION = '0.1.41';
-  var MARKER = 'SUBVIZ_SURGE_0_1_41';
+  var VERSION = '0.1.43';
+  var MARKER = 'SUBVIZ_SURGE_0_1_43';
   var ICON_BASE_URL = 'https://raw.githubusercontent.com/youniube/subviz/main/assets/';
   var FAVICON_URL = ICON_BASE_URL + 'favicon.ico?v=' + VERSION;
   var ICON_192_URL = ICON_BASE_URL + 'icon-192.png?v=' + VERSION;
