@@ -271,6 +271,7 @@ const payload = vm.runInContext([
   '  var p = buildExportPayload();',
   '  var name = gistVal("gistName");',
   '  var filename = gistVal("gistFilename") || gistDefaultFile();',
+  '  var cfg = (typeof getGistSettings === "function") ? getGistSettings() : { token:gistVal("gistToken"), gistName:name, filename:filename, gistId:gistVal("gistId"), public:gistChecked("gistPublic"), format:gistById("exportType") ? gistById("exportType").value : "clash" };',
   '  var raw = ' + payloadLiteral + ';',
   '  return {',
   '    token: raw.token,',
@@ -301,6 +302,7 @@ const payloadChecked = vm.runInContext([
   '  var p = buildExportPayload();',
   '  var name = gistVal("gistName");',
   '  var filename = gistVal("gistFilename") || gistDefaultFile();',
+  '  var cfg = (typeof getGistSettings === "function") ? getGistSettings() : { token:gistVal("gistToken"), gistName:name, filename:filename, gistId:gistVal("gistId"), public:gistChecked("gistPublic"), format:gistById("exportType") ? gistById("exportType").value : "clash" };',
   '  return (' + payloadLiteral + ').public;',
   '})()'
 ].join('\n'), sandbox);

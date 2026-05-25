@@ -21,10 +21,11 @@
     ];
   }
   function timeoutToSeconds(raw, defaultMs) {
-    var n = Number(raw || defaultMs);
-    if (!n || n < 1) n = defaultMs;
+    var n = Number(raw);
+    if (!isFinite(n) || n <= 0) n = Number(defaultMs || 3000);
+    if (!isFinite(n) || n <= 0) n = 3000;
     if (n >= 200) n = n / 1000;
-    if (n < 2) n = 2;
+    if (n < 0.2) n = 0.2;
     if (n > 30) n = 30;
     return n;
   }
