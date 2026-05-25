@@ -16,7 +16,7 @@ window.__svSettingsTest={
   getData:function(){return DATA;},
   setSelected:function(s){SELECTED=s||{};},
   setLoadJSON:function(fn){loadJSON=fn;},
-  aliveTest:aliveTest,
+  aliveTest:function(){ return window.aliveTest(); },
   landingTest:landingTest,
   cleanNames:cleanNames,
   buildExportPayload:buildExportPayload,
@@ -165,7 +165,8 @@ function jsonResponse(r) { return JSON.parse(r.response.body || '{}'); }
 
 (async function main() {
   let r = await runClientConcurrency('alive', 8);
-  assert(r.maxActive === 8, 'alive concurrency=8 should run 8 at most, got ' + r.maxActive);
+  assert(r.maxActive === 8, 'button-bound alive concurrency=8 should run 8 at most, got ' + r.maxActive);
+  assert(/实际按 8 并发调度/.test(r.sandbox.window.__lastStatus), 'alive final status should report actual concurrency=8: ' + r.sandbox.window.__lastStatus);
   let q = parseQuery(r.calls[0]);
   assert(q.timeout === '1000', 'alive timeout should be sent as 1000ms');
   assert(q.url === 'https://example.com/custom_204', 'alive URL should use latest UI value');
@@ -173,7 +174,8 @@ function jsonResponse(r) { return JSON.parse(r.response.body || '{}'); }
   assert(q.retry_delay === '123', 'alive retry delay should use latest UI value');
 
   r = await runClientConcurrency('alive', 3);
-  assert(r.maxActive === 3, 'alive concurrency=3 should run 3 at most, got ' + r.maxActive);
+  assert(r.maxActive === 3, 'button-bound alive concurrency=3 should run 3 at most, got ' + r.maxActive);
+  assert(/实际按 3 并发调度/.test(r.sandbox.window.__lastStatus), 'alive final status should report actual concurrency=3: ' + r.sandbox.window.__lastStatus);
 
   r = await runClientConcurrency('landing', 2);
   assert(r.maxActive === 2, 'landing concurrency=2 should run 2 at most, got ' + r.maxActive);
