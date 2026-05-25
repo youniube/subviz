@@ -161,7 +161,7 @@ const data = {
     byCountryCode: [{ key: 'JP', count: 1 }, { key: 'US', count: 1 }],
     bySourceFormat: [{ key: 'clash', count: 2 }]
   },
-  meta: { version: '0.1.43' }
+  meta: { version: '0.1.45' }
 };
 
 ['cards', 'protocols', 'countries', 'tbody', 'count', 'status', 'pf', 'cf',

@@ -55,10 +55,10 @@ function assert(cond, msg) {
 
 const health = json(request('/api/health'));
 assert(health.ok === true, 'health ok failed');
-assert(health.version === '0.1.43', 'unexpected version: ' + health.version);
-assert(health.marker === 'SUBVIZ_SURGE_0_1_43', 'unexpected marker: ' + health.marker);
+assert(health.version === '0.1.45', 'unexpected version: ' + health.version);
+assert(health.marker === 'SUBVIZ_SURGE_0_1_45', 'unexpected marker: ' + health.marker);
 
-const app = request('/app.js?v=0.1.43');
+const app = request('/app.js?v=0.1.45');
 assert(/function\s+analyzeURL/.test(app.body), 'client app missing analyzeURL');
 new vm.Script(app.body, { filename: 'src/client/app.js' });
 

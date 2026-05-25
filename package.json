@@ -1,6 +1,6 @@
 {
   "name": "subviz-surge",
-  "version": "0.1.43",
+  "version": "0.1.45",
   "private": true,
   "description": "Local subscription visual analyzer UI for Surge.",
   "scripts": {

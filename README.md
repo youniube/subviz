@@ -60,7 +60,7 @@ http://subviz.store/api/health
 {
   "ok": true,
   "name": "SubViz Surge",
-  "version": "0.1.43"
+  "version": "0.1.45"
 }
 ```
 
@@ -339,10 +339,10 @@ CDN、中转、伪装域名场景下，落地检测更接近真实情况。
 ## 当前版本
 
 ```text
-v0.1.43
+v0.1.45
 ```
 
-## v0.1.43 修复内容
+## v0.1.45 修复内容
 
 - 新增“上传到 Gist / 发布远程订阅”面板，可把当前已勾选节点按当前导出格式上传到 GitHub Gist。
 - 新增 Surge `$persistentStore` Token 管理：支持保存/更新、测试、清除 GitHub Token；上传时 Token 输入框留空会自动使用已保存 Token。

@@ -1,5 +1,5 @@
-#!name=SubViz Surge v0.1.43
-#!desc=Subscription node visual analyzer local UI for Surge. v0.1.43 Gist upload patch: add one-click Gist publishing plus Surge persistent token save/update/test/delete APIs.
+#!name=SubViz Surge v0.1.45
+#!desc=Subscription node visual analyzer local UI for Surge. v0.1.45 Gist upload patch: add one-click Gist publishing plus Surge persistent token save/update/test/delete APIs.
 #!category=Subscription
 
 [General]
