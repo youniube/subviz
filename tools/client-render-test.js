@@ -53,13 +53,29 @@ function trackingLog() {
 }
 
 // ---- 最小 DOM 桩 ----
+function hasClass(el, cls) {
+  return (String(el.className || '').split(/\s+/).filter(Boolean).indexOf(cls) >= 0);
+}
+function matchesSimple(el, sel) {
+  if (!el || !sel) return false;
+  if (sel[0] === '.') return hasClass(el, sel.slice(1));
+  if (sel[0] === '#') return el.id === sel.slice(1);
+  return String(el.tagName || '').toLowerCase() === sel.toLowerCase();
+}
+function walkChildren(el, fn) {
+  (el.children || []).forEach(function (child) {
+    fn(child);
+    walkChildren(child, fn);
+  });
+}
 function makeEl(tag) {
   const el = {
     tagName: tag || 'div',
+    id: '',
+    className: '',
     children: [],
     parentNode: null,
     style: {},
-    classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
     dataset: {},
     value: '',
     textContent: '',
@@ -67,17 +83,23 @@ function makeEl(tag) {
     checked: false,
     attributes: {},
     _listeners: {},
-    setAttribute(k, v) { this.attributes[k] = v; },
+    classList: {
+      add() { for (const name of arguments) if (!hasClass(el, name)) el.className = (el.className ? el.className + ' ' : '') + name; },
+      remove() { const drop = Array.prototype.slice.call(arguments); el.className = String(el.className || '').split(/\s+/).filter(Boolean).filter((x) => drop.indexOf(x) < 0).join(' '); },
+      contains(name) { return hasClass(el, name); },
+      toggle(name, force) { const on = force === undefined ? !hasClass(el, name) : !!force; if (on) this.add(name); else this.remove(name); return on; }
+    },
+    setAttribute(k, v) { this.attributes[k] = v; if (k === 'class') this.className = String(v || ''); if (k === 'id') this.id = String(v || ''); },
     getAttribute(k) { return this.attributes[k]; },
     addEventListener(ev, fn) { (this._listeners[ev] = this._listeners[ev] || []).push(fn); },
     removeEventListener() {},
     appendChild(c) { c.parentNode = this; this.children.push(c); return c; },
-    insertBefore(c) { c.parentNode = this; this.children.push(c); return c; },
-    closest() { return null; },
+    insertBefore(c, ref) { c.parentNode = this; const i = ref ? this.children.indexOf(ref) : -1; if (i >= 0) this.children.splice(i, 0, c); else this.children.push(c); return c; },
+    closest(sel) { let cur = this; while (cur) { if (matchesSimple(cur, sel)) return cur; cur = cur.parentNode; } return null; },
     remove() {},
-    click() {},
-    querySelector() { return null; },
-    querySelectorAll() { return []; },
+    click() { if (typeof this.onclick === 'function') return this.onclick({ target: this }); },
+    querySelector(sel) { let out = null; walkChildren(this, function (child) { if (!out && matchesSimple(child, sel)) out = child; }); return out; },
+    querySelectorAll(sel) { const out = []; walkChildren(this, function (child) { if (matchesSimple(child, sel)) out.push(child); }); return out; },
     select() {}, setSelectionRange() {}
   };
   return el;
@@ -94,8 +116,8 @@ const doc = {
     els[id].id = id;
     return els[id];
   },
-  querySelector() { return null; },
-  querySelectorAll() { return []; },
+  querySelector(sel) { return this.body.querySelector(sel); },
+  querySelectorAll(sel) { return this.body.querySelectorAll(sel); },
   addEventListener() {}
 };
 
@@ -166,9 +188,25 @@ const data = {
 
 ['cards', 'protocols', 'countries', 'tbody', 'count', 'status', 'pf', 'cf',
  'exportType', 'gistName', 'gistFilename', 'gistId', 'gistToken', 'gistPublic',
- 'gistUpload', 'gistRawUrl', 'gistPageUrl', 'url', 'raw'].forEach(function (id) {
+ 'gistUpload', 'gistRawUrl', 'gistPageUrl', 'gistTokenStatus', 'url', 'raw'].forEach(function (id) {
   doc.getElementById(id);
 });
+
+// 模拟 index.html 中统计卡片的外层标题，防止增强渲染把标题再塞进内容区导致重复。
+const protocolCard = makeEl('div');
+protocolCard.classList.add('card');
+const protocolTitle = makeEl('h2');
+protocolTitle.textContent = '协议分布';
+protocolCard.appendChild(protocolTitle);
+protocolCard.appendChild(els.protocols);
+doc.body.appendChild(protocolCard);
+const countryCard = makeEl('div');
+countryCard.classList.add('card');
+const countryTitle = makeEl('h2');
+countryTitle.textContent = '国家 / 地区分布';
+countryCard.appendChild(countryTitle);
+countryCard.appendChild(els.countries);
+doc.body.appendChild(countryCard);
 
 vm.runInContext('render(' + JSON.stringify(data) + ');', sandbox);
 assert(swallowedErrors.length === 0,
@@ -177,6 +215,12 @@ assert(swallowedErrors.length === 0,
 assert((els.cards.innerHTML || '').length > 0, 'render did not populate #cards');
 assert((els.tbody.innerHTML || '').length > 0, 'render did not populate #tbody');
 assert((els.protocols.innerHTML || '').length > 0, 'render did not populate #protocols');
+function countNeedle(haystack, needle) { return (String(haystack || '').match(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length; }
+function countBars(html) { return (String(html || '').match(/class="bar"/g) || []).length; }
+assert(countNeedle((protocolTitle.innerHTML || protocolTitle.textContent || '') + (els.protocols.innerHTML || ''), '协议分布') === 1,
+  'protocol chart title should appear exactly once after render');
+assert(countNeedle((countryTitle.innerHTML || countryTitle.textContent || '') + (els.countries.innerHTML || ''), '国家 / 地区分布') === 1,
+  'country chart title should appear exactly once after render');
 
 // ---- 3) sv136 dashboard 系列直调不抛 ----
 vm.runInContext('sv136EnsureDashboard(); sv136UpdateHealth(filtered()); sv136Refine();', sandbox);
@@ -240,6 +284,46 @@ const payloadChecked = vm.runInContext([
   '})()'
 ].join('\n'), sandbox);
 assert(payloadChecked === true, 'gistChecked should return true when checkbox checked');
+
+// ---- 5) 统计卡片展开入口必须有可见效果，且移动端可点击元素用 button ----
+const chartData = { ok: true, nodes: [] };
+for (let i = 0; i < 7; i++) {
+  chartData.nodes.push({
+    name: 'N' + i,
+    protocol: 'proto' + i,
+    server: 's' + i + '.example.com',
+    port: String(1000 + i),
+    countryCode: 'C' + i,
+    country: '地区' + i,
+    fingerprint: 'fp' + i,
+    extra: { type: 'demo' }
+  });
+}
+vm.runInContext('render(' + JSON.stringify(chartData) + ');', sandbox);
+assert(countNeedle((protocolTitle.innerHTML || protocolTitle.textContent || '') + (els.protocols.innerHTML || ''), '协议分布') === 1,
+  'protocol chart title should not duplicate after populated render');
+assert(countNeedle((countryTitle.innerHTML || countryTitle.textContent || '') + (els.countries.innerHTML || ''), '国家 / 地区分布') === 1,
+  'country chart title should not duplicate after populated render');
+assert(/<button[^>]+class="sv137-link"/.test(els.protocols.innerHTML) && /查看全部协议/.test(els.protocols.innerHTML),
+  'protocol chart should render a clickable button when there are hidden rows');
+assert(/<button[^>]+class="sv137-link"/.test(els.countries.innerHTML) && /查看全部地区/.test(els.countries.innerHTML),
+  'country chart should render a clickable button when there are hidden rows');
+const protocolBarsBefore = countBars(els.protocols.innerHTML);
+vm.runInContext('window.sv137ToggleChart("protocols");', sandbox);
+assert(countBars(els.protocols.innerHTML) > protocolBarsBefore && /收起协议/.test(els.protocols.innerHTML),
+  'clicking 查看全部协议 should expand the full protocol list visibly');
+const countryBarsBefore = countBars(els.countries.innerHTML);
+vm.runInContext('window.sv137ToggleChart("countries");', sandbox);
+assert(countBars(els.countries.innerHTML) > countryBarsBefore && /收起地区/.test(els.countries.innerHTML),
+  'clicking 查看全部地区 should expand the full country list visibly');
+
+// ---- 6) Token 测试成功状态必须写入 input.value，而不是只改 textContent ----
+els.gistTokenStatus.value = '读取中…';
+vm.runInContext('gistSetTokenStatus(true,"Token 有效，但尚未保存","valid");', sandbox);
+assert(els.gistTokenStatus.value === 'Token 有效，但尚未保存',
+  'gist token status input value should update after successful token test');
+assert(/gistSetTokenStatus\(true,tokenInput\?/.test(code),
+  'gist token test success path should synchronize the token status field');
 
 // ---- 5) 二次 render（模拟用户连点两次分析）也不应漏错 ----
 vm.runInContext('render(' + JSON.stringify(data) + ');', sandbox);
