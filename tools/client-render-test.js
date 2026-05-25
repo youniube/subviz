@@ -37,6 +37,18 @@ assert(!/<div class="wrap">\s*\n'\+\s*\n\s*'<div class="hero">/.test(htmlTemplat
 assert(!/<\/html>\s*\n'\+/.test(htmlTemplate),
   'HTML template must not leak trailing concatenation fragments');
 
+// ---- 0.1) 统计卡片对齐回归：数量 / 百分比必须拆列且使用等宽数字 ----
+assert(code.includes('sv137-dist-count') && code.includes('sv137-dist-percent'),
+  'distribution rows must render count and percent as separate cells');
+assert(/grid-template-columns:minmax\(64px,92px\) minmax\(52px,1fr\) 44px 56px/.test(code),
+  'distribution rows must use fixed 4-column grid');
+assert(/font-variant-numeric:tabular-nums/.test(code) && /font-feature-settings:"tnum" 1/.test(code),
+  'numeric cells must use tabular numbers');
+assert(/@media\(max-width:720px\)[\s\S]*sv135-chart-grid\{grid-template-columns:1fr!important;overflow-x:visible!important/.test(code),
+  'mobile chart cards should stack without horizontal overflow');
+assert(/#sv135Health \.health-cell\{[\s\S]*grid-template-rows:minmax\(16px,auto\) minmax\(24px,1fr\) minmax\(15px,auto\)/.test(code),
+  'health cells must reserve stable label / number / percent rows');
+
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'Assertion failed'); }
 
 // 拦截 console.log 输出，捕获被静默吞掉的 ReferenceError / TypeError
@@ -215,8 +227,17 @@ assert(swallowedErrors.length === 0,
 assert((els.cards.innerHTML || '').length > 0, 'render did not populate #cards');
 assert((els.tbody.innerHTML || '').length > 0, 'render did not populate #tbody');
 assert((els.protocols.innerHTML || '').length > 0, 'render did not populate #protocols');
+const distSample = vm.runInContext('sv137Bars([{key:"未知",count:246},{key:"越南超长地区名称测试",count:171},{key:"美国",count:41},{key:"英国",count:24}],616,4)', sandbox);
+assert(/sv137-dist-name/.test(distSample) && /sv137-dist-track/.test(distSample),
+  'distribution sample should include name and track cells');
+assert((distSample.match(/sv137-dist-count/g) || []).length === 4,
+  'distribution sample should render one fixed count cell per row');
+assert((distSample.match(/sv137-dist-percent/g) || []).length === 4,
+  'distribution sample should render one fixed percent cell per row');
+assert(!/>246 \(39\.9%\)</.test(distSample),
+  'distribution sample must not combine count and percent in a single text node');
 function countNeedle(haystack, needle) { return (String(haystack || '').match(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length; }
-function countBars(html) { return (String(html || '').match(/class="bar"/g) || []).length; }
+function countBars(html) { return (String(html || '').match(/class="bar(?:\s|")/g) || []).length; }
 assert(countNeedle((protocolTitle.innerHTML || protocolTitle.textContent || '') + (els.protocols.innerHTML || ''), '协议分布') === 1,
   'protocol chart title should appear exactly once after render');
 assert(countNeedle((countryTitle.innerHTML || countryTitle.textContent || '') + (els.countries.innerHTML || ''), '国家 / 地区分布') === 1,
@@ -316,6 +337,17 @@ const countryBarsBefore = countBars(els.countries.innerHTML);
 vm.runInContext('window.sv137ToggleChart("countries");', sandbox);
 assert(countBars(els.countries.innerHTML) > countryBarsBefore && /收起地区/.test(els.countries.innerHTML),
   'clicking 查看全部地区 should expand the full country list visibly');
+
+// ---- 5.1) 健康卡片在不同总数下都保持结构稳定 ----
+[0, 6, 69, 616, 1001].forEach(function (total) {
+  const expr = 'sv137RenderHealth(Array.from({length:' + total + '}, function(_, i){ return i % 3 === 0 ? {aliveOK:true} : (i % 3 === 1 ? {aliveOK:false} : {}); }))';
+  vm.runInContext(expr, sandbox);
+  const healthHtml = els.sv135Health.innerHTML || '';
+  assert(countNeedle(healthHtml, 'health-cell') === 4,
+    'health card should keep four status cells for total ' + total);
+  assert(/<small>/.test(healthHtml),
+    'health card should render fixed percent rows for total ' + total);
+});
 
 // ---- 6) Token 测试成功状态必须写入 input.value，而不是只改 textContent ----
 els.gistTokenStatus.value = '读取中…';
